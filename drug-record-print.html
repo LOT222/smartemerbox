@@ -1,0 +1,463 @@
+﻿<!doctype html>
+<html lang="th">
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Emergency Drug Box - Drug Record Print</title>
+    <script src="./config.js"></script>
+    <style>
+      @page {
+        size: A4;
+        margin: 0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: #fff;
+        color: #000;
+        font-family: Arial, "Noto Sans Thai", Tahoma, sans-serif;
+      }
+      .screen-status {
+        padding: 16px;
+        font: 14px Arial, sans-serif;
+      }
+      .print-page {
+        width: 210mm;
+        min-height: 297mm;
+        padding: 6mm 0 0 6mm;
+        background: #fff;
+      }
+      .drug-record-sheet {
+        width: var(--record-width, 130mm);
+        display: grid;
+        gap: 2mm;
+        align-content: start;
+      }
+      .drug-record-card {
+        width: var(--record-width, 130mm);
+        height: var(--record-height, 50mm);
+        border: 1px solid #111;
+        padding: 2.1mm;
+        display: grid;
+        align-content: start;
+        gap: 1.1mm;
+        overflow: hidden;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        background: #fff;
+        font-size: 7.2pt;
+        line-height: 1.15;
+      }
+      .drug-record-head {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 5mm;
+        align-items: start;
+        border-bottom: 1px solid #555;
+        padding-bottom: 1mm;
+      }
+      .drug-record-title {
+        font-size: 10.5pt;
+        font-weight: 700;
+        line-height: 1.1;
+      }
+      .drug-record-location {
+        font-size: 7pt;
+        margin-top: 0.5mm;
+      }
+      .drug-record-meta {
+        text-align: right;
+        line-height: 1.25;
+        white-space: nowrap;
+        font-size: 6.8pt;
+      }
+      .drug-record-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 6.8pt;
+      }
+      .drug-record-table th,
+      .drug-record-table td {
+        border: 1px solid #999;
+        height: 4.55mm;
+        padding: 0.65mm 1mm;
+        color: #000;
+        vertical-align: middle;
+      }
+      .drug-record-table th {
+        font-weight: 700;
+        text-align: center;
+        background: #fff;
+      }
+      .drug-record-table th:first-child {
+        text-align: left;
+      }
+      .drug-record-table td:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .drug-record-center {
+        text-align: center;
+      }
+      .drug-record-expiring {
+        color: #ff1f1f !important;
+        font-weight: 700;
+      }
+      .drug-record-note {
+        color: #ff1f1f;
+        font-size: 6.6pt;
+        line-height: 1.1;
+      }
+      .drug-record-foot {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 5mm;
+        align-items: end;
+        font-size: 6.6pt;
+      }
+      .drug-record-sheet.is-label-13x5 {
+        gap: 1.6mm;
+      }
+      .drug-record-sheet.is-label-13x5 .drug-record-card {
+        padding: 1.8mm;
+        gap: 0.75mm;
+        font-size: 7pt;
+      }
+      .drug-record-sheet.is-label-13x5 .drug-record-head {
+        gap: 3mm;
+        padding-bottom: 0.7mm;
+      }
+      .drug-record-sheet.is-label-13x5 .drug-record-title {
+        font-size: 10pt;
+      }
+      .drug-record-sheet.is-label-13x5 .drug-record-location {
+        margin-top: 0.25mm;
+      }
+      .drug-record-sheet.is-label-13x5 .drug-record-meta {
+        font-size: 6.5pt;
+        line-height: 1.15;
+      }
+      .drug-record-sheet.is-label-13x5 .drug-record-table {
+        font-size: 6.55pt;
+      }
+      .drug-record-sheet.is-label-13x5 .drug-record-table th,
+      .drug-record-sheet.is-label-13x5 .drug-record-table td {
+        height: 4.25mm;
+        padding: 0.35mm 0.75mm;
+      }
+      .drug-record-sheet.is-label-13x5 .drug-record-note,
+      .drug-record-sheet.is-label-13x5 .drug-record-foot {
+        font-size: 6.35pt;
+      }
+      @media screen {
+        body {
+          background: #fff;
+        }
+      }
+      @media print {
+        .screen-status {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="status" class="screen-status">กำลังเตรียมเอกสาร...</div>
+    <main id="printRoot"></main>
+    <script>
+      const SUPABASE_URL = window.SEB_SUPABASE_URL || "";
+      const SUPABASE_ANON_KEY = window.SEB_SUPABASE_ANON_KEY || "";
+      const API_URL =
+        window.SEB_API_URL ||
+        (SUPABASE_URL ? SUPABASE_URL.replace(/\/+$/, "") + "/functions/v1/api" : "");
+      const PRINT_ID = new URLSearchParams(window.location.search).get("printId") || "";
+
+      document.addEventListener("DOMContentLoaded", () => {
+        server("apiGetDrugRecordPrintJob", PRINT_ID)
+          .then(renderPrintDocument)
+          .catch((err) => {
+            byId("status").textContent =
+              (err && err.message) || err || "เปิดงานพิมพ์ไม่สำเร็จ";
+          });
+      });
+
+      async function server(name, ...args) {
+        if (!API_URL) throw new Error("ยังไม่ได้ตั้งค่า SEB_API_URL หรือ SEB_SUPABASE_URL");
+        let res;
+        try {
+          res = await fetch(API_URL, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              apikey: SUPABASE_ANON_KEY,
+              authorization: SUPABASE_ANON_KEY ? "Bearer " + SUPABASE_ANON_KEY : "",
+            },
+            body: JSON.stringify({ action: name, args }),
+          });
+        } catch (err) {
+          throw new Error("เชื่อมต่อ Supabase Edge Function ไม่ได้");
+        }
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || payload.error) throw new Error(payload.error || "API request failed");
+        return payload.data;
+      }
+
+      function renderPrintDocument(payload) {
+        const box = (payload && payload.box) || {};
+        const cfg = normalizeConfig_((payload && payload.cfg) || {});
+        const data = (payload && payload.printData) || {};
+        const size = contentSize_(cfg);
+        const labelClass = isLabel13x5_(size) ? " is-label-13x5" : "";
+        byId("printRoot").innerHTML =
+          '<div class="print-page"><div class="drug-record-sheet' +
+          labelClass +
+          '" style="--record-width:' +
+          size.width +
+          "mm; --record-height:" +
+          size.height +
+          'mm">' +
+          renderCards_(buildDrugRecordRows_(box.items || []), data, cfg, size) +
+          "</div></div>";
+        byId("status").textContent = "";
+        setTimeout(() => window.print(), 250);
+      }
+
+      function normalizeConfig_(cfg) {
+        const out = {
+          paper: cfg.paper || "label",
+          width: Number(cfg.width || 130),
+          height: Number(cfg.height || 50),
+        };
+        if (!["label", "a4", "custom"].includes(out.paper)) out.paper = "label";
+        return out;
+      }
+
+      function contentSize_(cfg) {
+        if (cfg.paper === "a4") return { width: 194, height: 132 };
+        if (cfg.paper === "custom") return { width: cfg.width || 130, height: cfg.height || 50 };
+        return { width: 130, height: 50 };
+      }
+
+      function isLabel13x5_(size) {
+        return Math.round(Number(size.width || 0)) === 130 && Math.round(Number(size.height || 0)) === 50;
+      }
+
+      function buildDrugRecordRows_(items) {
+        const groups = [];
+        const map = new Map();
+        (items || []).map(normalizePrintItem_).forEach((item) => {
+          if (!item.drugName) return;
+          const key = [
+            item.drugName || "",
+            item.strength || "",
+            item.form || "",
+            item.unit || "",
+          ].join("\u001f");
+          let group = map.get(key);
+          if (!group) {
+            group = {
+              name: [item.drugName, item.strength].filter(Boolean).join(" "),
+              unit: item.unit || "",
+              totalQty: 0,
+              lots: [],
+            };
+            map.set(key, group);
+            groups.push(group);
+          }
+          const qty = Number(item.qty || 0);
+          group.totalQty += qty;
+          group.lots.push({
+            lot: item.lot || "",
+            expiryDate: item.expiryDate || "",
+            qty,
+          });
+        });
+        return groups.flatMap((group) => {
+          const lots = group.lots.length ? group.lots : [{}];
+          return lots.map((lot, idx) => ({
+            name: idx === 0 ? group.name : "",
+            qty: idx === 0 ? group.totalQty : "",
+            lot: lot.lot || "",
+            lotQty: lot.qty,
+            expiryDate: lot.expiryDate || "",
+          }));
+        });
+      }
+
+      function renderCards_(rows, data, cfg, size) {
+        const isLabel13x5 = isLabel13x5_(size);
+        const pages = paginateRows_(rows, size.height, isLabel13x5);
+        return pages
+          .map((page, idx) => renderCard_(page, data, idx, pages.length, isLabel13x5))
+          .join("");
+      }
+
+      function paginateRows_(rows, heightMm, isLabel13x5) {
+        const items = rows || [];
+        if (!isLabel13x5) {
+          return [
+            {
+              rows: items.slice(),
+              rowCount: Math.max(1, items.length),
+              hasFooter: true,
+            },
+          ];
+        }
+        const rowsWithoutFooter = 7;
+        const rowsWithFooter = 6;
+        const pages = [];
+        if (items.length <= rowsWithFooter) {
+          return [{ rows: items.slice(), rowCount: rowsWithFooter, hasFooter: true }];
+        }
+
+        let cursor = 0;
+        while (items.length - cursor > rowsWithFooter) {
+          pages.push({
+            rows: items.slice(cursor, cursor + rowsWithoutFooter),
+            rowCount: rowsWithoutFooter,
+            hasFooter: false,
+          });
+          cursor += rowsWithoutFooter;
+        }
+
+        pages.push({
+          rows: items.slice(cursor),
+          rowCount: rowsWithFooter,
+          hasFooter: true,
+        });
+        return pages;
+      }
+
+      function renderCard_(page, data, index, total, hidePageText) {
+        const pageText =
+          !hidePageText && total > 1 ? "<br>หน้า " + (index + 1) + "/" + total : "";
+        const footer =
+          page.hasFooter
+            ? '<div class="drug-record-note">* ยาใกล้หมดอายุ (&lt;1 เดือน)</div><div class="drug-record-foot"><div>เวลา: ' +
+              esc(data.time || "") +
+              '</div><div>ผู้ตรวจ: __________________</div></div>'
+            : "";
+        return (
+          '<section class="drug-record-card"><header class="drug-record-head"><div><div class="drug-record-title">' +
+          esc(data.boxCode || "") +
+          '</div><div class="drug-record-location">' +
+          esc(data.location || "-") +
+          '</div></div><div class="drug-record-meta"><b>วันที่: ' +
+          esc(data.inspectionDate || "") +
+          "</b><br>ผู้ตรวจ: " +
+          esc(data.inspector || "________________") +
+          pageText +
+          "</div></header>" +
+          renderTable_(page.rows, page.rowCount) +
+          footer +
+          "</section>"
+        );
+      }
+
+      function renderTable_(items, rowCount) {
+        const rows = items.map(renderRow_);
+        while (rows.length < rowCount) rows.push(renderRow_({}));
+        return (
+          '<table class="drug-record-table"><colgroup><col style="width:54%"><col style="width:10%"><col style="width:18%"><col style="width:18%"></colgroup><thead><tr><th>ยา</th><th>จำนวน</th><th>Lot</th><th>Exp</th></tr></thead><tbody>' +
+          rows.join("") +
+          "</tbody></table>"
+        );
+      }
+
+      function renderRow_(item) {
+        item = item || {};
+        const expiring = isWithinOneMonth_(item.expiryDate);
+        return (
+          "<tr><td>" +
+          esc(item.name || "") +
+          '</td><td class="drug-record-center">' +
+          (item.qty === undefined ? "" : esc(item.qty)) +
+          '</td><td class="drug-record-center">' +
+          esc(lotWithQtyText_(item.lot, item.lotQty)) +
+          '</td><td class="drug-record-center ' +
+          (expiring ? "drug-record-expiring" : "") +
+          '">' +
+          esc(formatShortDateBE_(item.expiryDate)) +
+          (expiring ? "*" : "") +
+          "</td></tr>"
+        );
+      }
+
+      function normalizePrintItem_(item) {
+        if (!item || !looksLikeDate_(item.qty)) return item || {};
+        return {
+          ...item,
+          form: item.lot || "",
+          lot: item.expiryDate || "",
+          expiryDate: item.qty || "",
+          qty: item.unit || 0,
+          unit: item.sortOrder || "",
+          sortOrder: item.requiredQty || "",
+          requiredQty: item.form || item.unit || 0,
+        };
+      }
+
+      function lotWithQtyText_(lotValue, qtyValue) {
+        const lot = String(lotValue || "").trim();
+        const qty = qtyValue;
+        const hasQty = qty !== undefined && qty !== null && String(qty).trim() !== "";
+        return lot ? lot + (hasQty ? " (" + qty + ")" : "") : "";
+      }
+
+      function isWithinOneMonth_(value) {
+        if (!value) return false;
+        const d = new Date(value);
+        if (isNaN(d)) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const limit = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+        return d >= today && d <= limit;
+      }
+
+      function looksLikeDate_(value) {
+        return (
+          Object.prototype.toString.call(value) === "[object Date]" ||
+          (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value))
+        );
+      }
+
+      function formatShortDateBE_(value) {
+        if (!value) return "";
+        const d = new Date(value);
+        if (isNaN(d)) return String(value).slice(0, 10);
+        return (
+          String(d.getDate()).padStart(2, "0") +
+          "/" +
+          String(d.getMonth() + 1).padStart(2, "0") +
+          "/" +
+          (d.getFullYear() + 543)
+        );
+      }
+
+      function byId(id) {
+        return document.getElementById(id);
+      }
+
+      function esc(value) {
+        return String(value ?? "").replace(
+          /[&<>"']/g,
+          (ch) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#039;",
+            })[ch],
+        );
+      }
+    </script>
+  </body>
+</html>
+

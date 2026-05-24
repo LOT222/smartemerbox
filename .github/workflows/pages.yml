@@ -1,0 +1,36 @@
+name: Deploy static SPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Write runtime config
+        run: |
+          cat > public/config.js <<'EOF'
+          window.SEB_SUPABASE_URL = "${{ vars.SEB_SUPABASE_URL }}";
+          window.SEB_SUPABASE_ANON_KEY = "${{ secrets.SEB_SUPABASE_ANON_KEY }}";
+          EOF
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deployment
+        uses: actions/deploy-pages@v4

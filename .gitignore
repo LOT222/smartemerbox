@@ -1,0 +1,6 @@
+config.js
+public/config.js
+.env
+.env.*
+.supabase/
+node_modules/

@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>SEB API Check</title>
+<script src="./config.js"></script>
+<body style="font-family:Arial,'Noto Sans Thai',sans-serif;padding:24px">
+  <h1>SEB API Check</h1>
+  <pre id="out">Checking...</pre>
+  <script>
+    const out = document.getElementById("out");
+    const url = (window.SEB_SUPABASE_URL || "").replace(/\/+$/, "") + "/functions/v1/api";
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: window.SEB_SUPABASE_ANON_KEY || "",
+        authorization: window.SEB_SUPABASE_ANON_KEY ? "Bearer " + window.SEB_SUPABASE_ANON_KEY : "",
+      },
+      body: JSON.stringify({ action: "apiHealth", args: [] }),
+    })
+      .then(async (res) => {
+        const text = await res.text();
+        out.textContent = "HTTP " + res.status + "\n\n" + text;
+      })
+      .catch((err) => {
+        out.textContent =
+          "เชื่อมต่อไม่ได้\n\n" +
+          err.message +
+          "\n\nตรวจว่า config.js ถูกต้อง และ deploy Supabase function api แล้ว";
+      });
+  </script>
+</body>
+
