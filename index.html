@@ -2071,6 +2071,7 @@
       function collectSettingsPayload_() {
         const payload = {};
         document.querySelectorAll("[data-setting]").forEach((input) => {
+          if (input.dataset.setting === "APP_CREDIT_TEXT" && !creditEditUnlocked) return;
           payload[input.dataset.setting] = input.value;
         });
         return payload;
@@ -3842,7 +3843,10 @@
           const savedSettings = persistedSettings_();
           const currentCredit =
             savedSettings.APP_CREDIT_TEXT || "Developed by Natee I.,Pharm D.";
-          if (payload.APP_CREDIT_TEXT !== currentCredit && creditEditPin !== "2222") {
+          const wantsCreditChange =
+            Object.prototype.hasOwnProperty.call(payload, "APP_CREDIT_TEXT") &&
+            payload.APP_CREDIT_TEXT !== currentCredit;
+          if (wantsCreditChange && creditEditPin !== "2222") {
             return toast("ไม่สามารถแก้ไข Credit ได้");
           }
           await server(
@@ -3854,7 +3858,7 @@
           settingsPreview = null;
           creditEditUnlocked = false;
           creditEditPin = "";
-          if (state.data) state.data.settings = payload;
+          if (state.data) state.data.settings = { ...savedSettings, ...payload };
           applyThemeSettings();
           updateBrand_();
           updateDocumentTitle_();
