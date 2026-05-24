@@ -1808,6 +1808,11 @@
         return (state.data && state.data.loginUsers) || [];
       }
 
+      function setLoginUsers_(users) {
+        state.data = state.data || {};
+        state.data.loginUsers = Array.isArray(users) ? users : [];
+      }
+
       function loginUserLabel_(user) {
         if (user.displayText) return user.displayText;
         const name = user.displayName || user.username || "";
@@ -1829,9 +1834,43 @@
       }
 
       function updateLoginUserSelect_(selected = "") {
-        const select = byId("loginUsername");
-        if (!select) return;
-        select.innerHTML = loginUserOptionsHtml_(selected || select.value);
+        ["loginUsername", "alertLoginUsername"].forEach((id) => {
+          const select = byId(id);
+          if (!select) return;
+          select.innerHTML = loginUserOptionsHtml_(selected || select.value);
+        });
+      }
+
+      async function ensureLoginUsersLoaded_() {
+        if (loginUsers_().length > 1) return;
+        try {
+          const res = await server("apiLoginUsers");
+          setLoginUsers_((res && res.loginUsers) || []);
+          updateLoginUserSelect_();
+          return;
+        } catch (err) {
+          // Keep going; older Edge Function deployments may not have apiLoginUsers yet.
+        }
+        try {
+          if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+          const res = await fetch(
+            SUPABASE_URL.replace(/\/+$/, "") + "/rest/v1/rpc/public_login_users",
+            {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                apikey: SUPABASE_ANON_KEY,
+                authorization: "Bearer " + SUPABASE_ANON_KEY,
+              },
+              body: "{}",
+            },
+          );
+          if (!res.ok) return;
+          setLoginUsers_(await res.json());
+          updateLoginUserSelect_();
+        } catch (err) {
+          console.warn("Cannot load login users", err);
+        }
       }
 
       function activeSettings_() {
@@ -2292,6 +2331,7 @@
         byId("appPage").classList.add("hidden");
         byId("publicPage").classList.add("hidden");
         updateLoginUserSelect_();
+        ensureLoginUsersLoaded_();
         byId("loginUsername").focus();
       }
 
@@ -2299,6 +2339,7 @@
         byId("modalRoot").classList.remove("hidden");
         byId("modalRoot").innerHTML =
           `<div class="modal-backdrop"><div class="modal sweet-modal"><div class="sweet-icon">${iconSvg_("power")}</div><h2>เข้าสู่ระบบ</h2><p>กรุณาเข้าสู่ระบบก่อนใช้งานเมนูนี้</p><div class="sweet-form"><label>User<select id="alertLoginUsername" autocomplete="username" onkeydown="handleLoginEnter(event, 'alert')">${loginUserOptionsHtml_(val("loginUsername") || "admin")}</select></label><label>Password<input id="alertLoginPassword" type="password" autocomplete="current-password" value="" onkeydown="handleLoginEnter(event, 'alert')"></label><div class="actions"><button class="secondary" onclick="closeModal()">ยกเลิก</button><button onclick="loginFromAlert()">เข้าสู่ระบบ</button></div></div></div></div>`;
+        ensureLoginUsersLoaded_();
         setTimeout(() => byId("alertLoginUsername").focus(), 0);
       }
 
