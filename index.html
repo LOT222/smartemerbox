@@ -2280,57 +2280,20 @@
           });
       }
 
-// ฟังก์ชันใหม่สำหรับดึงข้อมูลผู้ใช้จาก Supabase โดยตรง
-// ฟังก์ชันใหม่สำหรับดึงข้อมูลผู้ใช้จาก Supabase โดยตรง
-async function loadUsersToDropdown() {
-    try {
-        const { data, error } = await supabase.from('users').select('username, displayName');
-        if (error) throw error;
-
-        // รายชื่อ ID ของกล่องเลือกผู้ใช้ ทั้งหน้าหลักและป๊อปอัป
-        const elementsToUpdate = ['loginUsername', 'alertLoginUsername'];
-
-        elementsToUpdate.forEach(id => {
-            const selectElement = document.getElementById(id);
-            if (selectElement) { // ถ้าเจอกล่องนี้บนหน้าจอ
-                selectElement.innerHTML = ''; 
-                if (data && data.length > 0) {
-                    data.forEach(user => {
-                        const option = document.createElement('option');
-                        option.value = user.username;
-                        option.textContent = user.displayName || user.username;
-                        selectElement.appendChild(option);
-                    });
-                } else {
-                    selectElement.innerHTML = '<option value="">ไม่มีข้อมูลผู้ใช้</option>';
-                }
-            }
-        });
-    } catch (error) {
-        console.error("เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้:", error);
-    }
-}
-
-function showLogin() {
-    if (state.data) {
-        byId("loginPage").classList.add("hidden");
+      function showLogin() {
+        if (state.data) {
+          byId("loginPage").classList.add("hidden");
+          byId("publicPage").classList.add("hidden");
+          byId("appPage").classList.remove("hidden");
+          openLoginAlert();
+          return;
+        }
+        byId("loginPage").classList.remove("hidden");
+        byId("appPage").classList.add("hidden");
         byId("publicPage").classList.add("hidden");
-        byId("appPage").classList.remove("hidden");
-        openLoginAlert();
-        
-        // เติมตรงนี้ครับ! ให้มันดึงข้อมูลใส่ป๊อปอัปก่อนที่จะจบการทำงาน
-        loadUsersToDropdown(); 
-        
-        return;
-    }
-    byId("loginPage").classList.remove("hidden");
-    byId("appPage").classList.add("hidden");
-    byId("publicPage").classList.add("hidden");
-    
-    loadUsersToDropdown();
-    
-    byId("loginUsername").focus();
-}
+        updateLoginUserSelect_();
+        byId("loginUsername").focus();
+      }
 
       function openLoginAlert() {
         byId("modalRoot").classList.remove("hidden");
