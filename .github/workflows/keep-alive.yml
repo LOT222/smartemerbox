@@ -1,13 +1,15 @@
 name: Keep Supabase Alive
 on:
   schedule:
-    - cron: "0 0 * * *" # ทำงานทุกวัน เวลา 00:00 น.
+    - cron: "0 0 * * *" # ระบบจะยิง Request ปลุกฐานข้อมูลให้ทุกวัน
+  workflow_dispatch: # ปุ่มสำหรับกดทดสอบรันด้วยตัวเอง (Manual)
+
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Supabase Project
         run: |
-          curl -X GET "https://<YOUR-PROJECT-REF>.supabase.co/rest/v1/" \
-          -H "apikey: <YOUR-ANON-KEY>" \
-          -H "Authorization: Bearer <YOUR-ANON-KEY>"
+          curl -i -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/" \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
