@@ -38,6 +38,7 @@ function json(payload: unknown, status = 200) {
 
 const actions: Record<string, (...args: any[]) => Promise<any>> = {
   apiHealth,
+  apiLoginUsers,
   apiLogin,
   apiLogout,
   apiBootstrap,
@@ -69,6 +70,11 @@ async function apiHealth() {
   const { error } = await db.from("settings").select("key").limit(1);
   if (error) throw error;
   return { ok: true, appUrl: appUrl(), at: new Date().toISOString() };
+}
+
+async function apiLoginUsers() {
+  const users = await listWhere("users", "active", true, "username");
+  return { loginUsers: users.map(publicUser) };
 }
 
 async function apiLogin(username: string, password: string) {
@@ -176,10 +182,7 @@ async function apiSaveSettings(token: string, settings: Record<string, string>, 
 
 async function apiTestLineAlert(token: string, settings: any) {
   await requireAdmin(token);
-  return sendLineFlexMessage({
-    type: "text",
-    text: `ทดสอบระบบแจ้งเตือน Smart Emergency Box\n${new Date().toLocaleString("th-TH")}`,
-  }, settings);
+  return sendLineFlexMessage(buildTestLineFlex(settings), settings);
 }
 
 async function apiSaveUser(token: string, payload: any) {
@@ -582,29 +585,280 @@ function countBy(rows: any[], fn: (row: any) => string) {
 async function sendLineFlexMessage(message: any, overrideSettings?: any) {
   const settings = overrideSettings || await settingsObject();
   const token = settings.LINE_CHANNEL_ACCESS_TOKEN || "";
-  const ids = String(settings.LINE_TO_ID || "").split(/\n|\|/).map((s) => s.trim()).filter(Boolean);
-  if (!token || !ids.length) return { sent: 0, skipped: true };
+  const ids = await getLineTargets(settings);
+  if (!token) {
+    return { ok: false, sent: 0, failed: 0, skipped: true, message: "ยังไม่ได้ตั้งค่า LINE Channel Access Token" };
+  }
+  if (!ids.length) {
+    return { ok: false, sent: 0, failed: 0, skipped: true, message: "ยังไม่มี LINE To ID หรือผู้รับจาก webhook" };
+  }
   const results = [];
   for (const to of ids) {
     const res = await fetch("https://api.line.me/v2/bot/message/push", {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ to, messages: [message.type ? message : { type: "text", text: String(message) }] }),
+      body: JSON.stringify({ to, messages: [message && message.type ? message : { type: "text", text: String(message) }] }),
     });
     results.push({ to, status: res.status, body: await res.text() });
   }
-  return { sent: results.filter((r) => r.status >= 200 && r.status < 300).length, results };
+  const sent = results.filter((r) => r.status >= 200 && r.status < 300).length;
+  const failed = results.length - sent;
+  return {
+    ok: sent > 0,
+    sent,
+    failed,
+    status: failed ? results.find((r) => r.status < 200 || r.status >= 300)?.status : 200,
+    message: failed
+      ? `ส่ง LINE Flex สำเร็จ ${sent} รายการ, ไม่สำเร็จ ${failed} รายการ`
+      : `ส่ง LINE Flex สำเร็จ ${sent} รายการ`,
+    results,
+  };
+}
+
+async function getLineTargets(settings: any) {
+  const configured = String(settings.LINE_TO_ID || "").split(/\n|\|/).map((s) => s.trim()).filter(Boolean);
+  const { data } = await db.from("lineRecipients").select("recipientId").eq("active", true);
+  const recipients = (data || []).map((row: any) => row.recipientId).filter(Boolean);
+  return [...new Set([...configured, ...recipients])];
+}
+
+const LINE_FLEX_THEME = {
+  green: "#059669",
+  red: "#d62828",
+  orange: "#ef4b00",
+  navy: "#17375e",
+  blue: "#1d4ed8",
+  ink: "#172033",
+  muted: "#687386",
+  pale: "#f6f7fb",
+  border: "#e5e7eb",
+  dangerText: "#c0262d",
+};
+
+function buildTestLineFlex(settings: any = {}) {
+  const title = settingForMessage(settings, "LINE_TEST_TITLE", "ทดสอบระบบแจ้งเตือน");
+  const subtitle = settingForMessage(settings, "LINE_TEST_SUBTITLE", "LINE Messaging API ทำงานปกติ");
+  return {
+    type: "flex",
+    altText: title,
+    contents: {
+      type: "bubble",
+      header: lineHeader(title, LINE_FLEX_THEME.green),
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "20px",
+        spacing: "sm",
+        contents: [
+          lineText(subtitle, 18, LINE_FLEX_THEME.ink, false),
+          lineText(`เวลา: ${formatLineDateTime(new Date())} น.`, 15, LINE_FLEX_THEME.muted, false),
+          lineText(settingForMessage(settings, "HOSPITAL_NAME", "โรงพยาบาล"), 15, LINE_FLEX_THEME.muted, false),
+        ],
+      },
+      footer: lineFooter(settings),
+    },
+  };
 }
 
 async function buildOpenBoxFlex(box: any, event: any) {
-  return { type: "text", text: `เปิดกล่องยาฉุกเฉิน\nกล่อง: ${box.boxCode}\nHN: ${event.hn || "-"}\nเวลา: ${event.openedAt}` };
+  const settings = await settingsObject();
+  const d = parseDate(event.openedAt) || new Date();
+  const title = settingForMessage(settings, "LINE_OPEN_TITLE", "เปิดกล่องยาฉุกเฉิน!");
+  const subtitle = settingForMessage(settings, "LINE_OPEN_SUBTITLE", "Smart Emergency Box (SEB)");
+  return {
+    type: "flex",
+    altText: `[SEB] เปิดกล่องยา ${box.boxCode || "-"}`,
+    contents: {
+      type: "bubble",
+      header: lineHeader(title, LINE_FLEX_THEME.red, subtitle),
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "20px",
+        spacing: "md",
+        contents: [
+          lineInfoRow("📦 กล่องยา", box.boxCode || "-", LINE_FLEX_THEME.blue),
+          lineInfoRow("📍 สถานที่", box.location || "-"),
+          lineInfoRow("🏥 HN ผู้ป่วย", event.hn || "-", LINE_FLEX_THEME.blue),
+          { type: "separator", margin: "xs", color: LINE_FLEX_THEME.border },
+          lineInfoRow("📅 วันที่", formatLineDate(d)),
+          lineInfoRow("⏰ เวลา", `${formatTime(d)} น.`, LINE_FLEX_THEME.ink),
+        ],
+      },
+      footer: lineFooter({ ...settings, LINE_FOOTER_TEXT: settingForMessage(settings, "LINE_FOOTER_TEXT", "Smart SEB") }),
+    },
+  };
 }
 
 async function buildExpiryFlex(items: any[]) {
-  const lines = items.slice(0, 20).map((i) => `${i.boxCode || i.box?.boxCode || "-"}: ${i.drugName} Lot ${i.lot || "-"} Exp ${i.expiryDate || "-"}`);
-  return { type: "text", text: `รายงานยาใกล้หมดอายุ\n${lines.join("\n") || "ไม่พบรายการ"}` };
+  const settings = await settingsObject();
+  const urgentItems = items.filter((item) => daysUntil(item.expiryDate) <= 14);
+  const warningItems = items.filter((item) => {
+    const daysLeft = daysUntil(item.expiryDate);
+    return daysLeft > 14 && daysLeft <= 30;
+  });
+  const urgentVisible = urgentItems.slice(0, 5);
+  const warningVisible = warningItems.slice(0, 10 - urgentVisible.length);
+  const visibleItems = urgentVisible.concat(warningVisible);
+  const title = settingForMessage(settings, "LINE_EXPIRY_TITLE", "[SEB] แจ้งเตือนยาใกล้หมดอายุ");
+  const subtitle = settingForMessage(settings, "LINE_EXPIRY_SUBTITLE", "Smart Emergency Box");
+  const bodyContents: any[] = [];
+  appendExpirySection(bodyContents, "[14 วัน] ใกล้หมดอายุ", LINE_FLEX_THEME.orange, urgentVisible);
+  appendExpirySection(bodyContents, "[30 วัน] แจ้งเตือนล่วงหน้า", LINE_FLEX_THEME.green, warningVisible);
+  if (!bodyContents.length) {
+    bodyContents.push(lineText("ไม่พบรายการยาใกล้หมดอายุใน 30 วัน", 15, LINE_FLEX_THEME.muted, false));
+  }
+  return {
+    type: "flex",
+    altText: `${title} ${visibleItems.length} รายการ`,
+    contents: {
+      type: "bubble",
+      header: lineHeader(title, LINE_FLEX_THEME.navy, `${subtitle} · ${visibleItems.length} รายการ`),
+      body: {
+        type: "box",
+        layout: "vertical",
+        paddingAll: "0px",
+        spacing: "none",
+        contents: bodyContents,
+      },
+      footer: lineFooter(settings),
+    },
+  };
 }
 
+function appendExpirySection(contents: any[], label: string, color: string, items: any[]) {
+  if (!items.length) return;
+  contents.push(expirySectionHeader(label, color));
+  items.slice(0, 5).forEach((item, index) => {
+    if (index) contents.push({ type: "separator", color: LINE_FLEX_THEME.border });
+    contents.push(expiryItemBox(item));
+  });
+}
+
+function expirySectionHeader(label: string, color: string) {
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: color,
+    paddingAll: "14px",
+    contents: [lineText(label, 18, "#ffffff", true)],
+  };
+}
+
+function expiryItemBox(item: any) {
+  const name = [item.drugName, item.strength].filter(Boolean).join(" ");
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: "#ffffff",
+    paddingAll: "18px",
+    spacing: "sm",
+    contents: [
+      {
+        type: "box",
+        layout: "horizontal",
+        spacing: "md",
+        contents: [
+          lineText(name || "-", 20, LINE_FLEX_THEME.ink, true, { flex: 5 }),
+          lineText(item.boxCode || item.box?.boxCode || "-", 20, LINE_FLEX_THEME.blue, true, { align: "end", flex: 2 }),
+        ],
+      },
+      lineText(`จำนวน: ${item.qty || 0} ${item.unit || ""}`.trim(), 16, LINE_FLEX_THEME.muted, false),
+      lineText(`Lot: ${item.lot || "-"}`, 16, LINE_FLEX_THEME.muted, false),
+      lineText(`หมดอายุ: ${formatLineDate(item.expiryDate)}`, 16, LINE_FLEX_THEME.dangerText, false),
+    ],
+  };
+}
+
+function lineHeader(title: string, color: string, subtitle = "") {
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: color,
+    paddingAll: "18px",
+    contents: [
+      lineText(title, 20, "#ffffff", true),
+      lineText(subtitle, 14, "#dbeafe", false),
+    ].filter((item: any) => item.text),
+  };
+}
+
+function lineFooter(settings: any = {}) {
+  const footer = settingForMessage(settings, "LINE_FOOTER_TEXT", "Smart SEB");
+  return {
+    type: "box",
+    layout: "vertical",
+    backgroundColor: LINE_FLEX_THEME.pale,
+    paddingAll: "12px",
+    contents: [
+      lineText(`${settingForMessage(settings, "HOSPITAL_NAME", "โรงพยาบาล")} · ${footer}`, 13, "#8a94a6", false, {
+        align: "center",
+      }),
+    ],
+  };
+}
+
+function lineText(text: any, size: number, color: string, bold: boolean, extra: any = {}) {
+  const sizeName = size >= 20 ? "xl" : size >= 18 ? "lg" : size >= 16 ? "md" : size <= 13 ? "xs" : "sm";
+  return {
+    type: "text",
+    text: String(text || "-"),
+    size: sizeName,
+    color: color || LINE_FLEX_THEME.ink,
+    weight: bold ? "bold" : "regular",
+    wrap: true,
+    ...extra,
+  };
+}
+
+function lineInfoRow(label: string, value: any, valueColor = LINE_FLEX_THEME.ink) {
+  return {
+    type: "box",
+    layout: "baseline",
+    spacing: "md",
+    contents: [
+      { type: "text", text: label, size: "md", color: LINE_FLEX_THEME.muted, flex: 4, wrap: true },
+      { type: "text", text: String(value || "-"), size: "md", color: valueColor, weight: "bold", flex: 5, wrap: true },
+    ],
+  };
+}
+
+function settingForMessage(settings: any, key: string, fallback = "") {
+  const value = settings && settings[key] !== undefined ? settings[key] : undefined;
+  return value === undefined || value === null || value === "" ? fallback : String(value);
+}
+
+function daysUntil(value: any) {
+  const d = parseDate(value);
+  if (!d) return 9999;
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Math.ceil((target - start) / 86400000);
+}
+
+function parseDate(value: any) {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatLineDate(value: any) {
+  const d = parseDate(value);
+  return d ? d.toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" }) : "-";
+}
+
+function formatLineDateTime(value: any) {
+  const d = parseDate(value);
+  return d
+    ? d.toLocaleString("th-TH", { timeZone: "Asia/Bangkok", dateStyle: "short", timeStyle: "short" })
+    : "-";
+}
+
+function formatTime(value: any) {
+  const d = parseDate(value);
+  return d ? d.toLocaleTimeString("th-TH", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit" }) : "-";
+}
 async function handleLineWebhook(payload: any) {
   let saved = 0;
   for (const event of payload.events || []) {
@@ -679,3 +933,5 @@ function appUrl(path = "index.html") {
   if (!PUBLIC_SITE_URL) return "";
   return path === "index.html" ? `${PUBLIC_SITE_URL}/index.html` : `${PUBLIC_SITE_URL}/${path}`;
 }
+
+
