@@ -1993,6 +1993,32 @@
         );
       }
 
+      function settingSelect_(key, label, options, fallback = "") {
+        const current = settingValue_(key, fallback);
+        return (
+          "<label>" +
+          esc(label) +
+          '<select data-setting="' +
+          attr(key) +
+          '" id="set' +
+          attr(key) +
+          '">' +
+          options
+            .map(
+              (option) =>
+                '<option value="' +
+                attr(option.value) +
+                '" ' +
+                (option.value === current ? "selected" : "") +
+                ">" +
+                esc(option.label) +
+                "</option>",
+            )
+            .join("") +
+          "</select></label>"
+        );
+      }
+
       function settingTextarea_(key, label, fallback = "") {
         return (
           "<label>" +
@@ -2952,6 +2978,15 @@
           settingField_(
             "LINE_CHANNEL_ACCESS_TOKEN",
             "LINE Channel Access Token",
+          ) +
+          settingSelect_(
+            "LINE_SEND_MODE",
+            "รูปแบบการส่ง LINE",
+            [
+              { value: "broadcast", label: "ส่งให้ทุกคนที่เพิ่มเพื่อน OA" },
+              { value: "push", label: "ส่งเฉพาะ LINE To ID / ผู้รับที่เคยบันทึก" },
+            ],
+            "broadcast",
           ) +
           settingField_("LINE_TO_ID", "LINE To ID") +
           settingField_(

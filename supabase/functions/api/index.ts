@@ -585,10 +585,29 @@ function countBy(rows: any[], fn: (row: any) => string) {
 async function sendLineFlexMessage(message: any, overrideSettings?: any) {
   const settings = overrideSettings || await settingsObject();
   const token = settings.LINE_CHANNEL_ACCESS_TOKEN || "";
-  const ids = await getLineTargets(settings);
+  const sendMode = String(settings.LINE_SEND_MODE || "broadcast").toLowerCase();
   if (!token) {
     return { ok: false, sent: 0, failed: 0, skipped: true, message: "ยังไม่ได้ตั้งค่า LINE Channel Access Token" };
   }
+  if (sendMode === "broadcast") {
+    const res = await fetch("https://api.line.me/v2/bot/message/broadcast", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ messages: [message && message.type ? message : { type: "text", text: String(message) }] }),
+    });
+    const body = await res.text();
+    const ok = res.status >= 200 && res.status < 300;
+    return {
+      ok,
+      sent: ok ? 1 : 0,
+      failed: ok ? 0 : 1,
+      broadcast: true,
+      status: res.status,
+      message: ok ? "ส่ง LINE Broadcast สำเร็จ" : "ส่ง LINE Broadcast ไม่สำเร็จ",
+      results: [{ to: "broadcast", status: res.status, body }],
+    };
+  }
+  const ids = await getLineTargets(settings);
   if (!ids.length) {
     return { ok: false, sent: 0, failed: 0, skipped: true, message: "ยังไม่มี LINE To ID หรือผู้รับจาก webhook" };
   }

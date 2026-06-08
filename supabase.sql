@@ -165,6 +165,7 @@ values
   ('EXPIRY_ALERT_DAYS', '90', 'Days before expiry to alert'),
   ('HOSPITAL_NAME', '', 'Hospital name'),
   ('LINE_CHANNEL_ACCESS_TOKEN', '', 'LINE long-lived channel access token'),
+  ('LINE_SEND_MODE', 'broadcast', 'LINE send mode: broadcast or push'),
   ('LINE_TO_ID', '', 'LINE user/group/room ids separated by newline or pipe')
 on conflict (key) do nothing;
 
