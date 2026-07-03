@@ -433,7 +433,8 @@ async function boxWithItems(id: string) {
 }
 
 function decorateBox(box: any, items: any[]) {
-  return { ...box, items, qrUrl: `${appUrl()}?page=open&boxId=${box.id}&t=${box.qrToken}` };
+  const decorated = { ...box, items };
+  return { ...decorated, status: autoBoxStatus(decorated), qrUrl: `${appUrl()}?page=open&boxId=${box.id}&t=${box.qrToken}` };
 }
 
 async function recordOpenEvent(box: any, payload: any, user: any) {
@@ -531,7 +532,8 @@ async function getExpiringItems() {
 
 function buildStats(boxes: any[], events: any[], expiringCount: number) {
   const byStatus = boxes.reduce((acc: any, box: any) => {
-    acc[box.status || "ไม่ระบุ"] = (acc[box.status || "ไม่ระบุ"] || 0) + 1;
+    const status = autoBoxStatus(box) || "ไม่ระบุ";
+    acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
   return {

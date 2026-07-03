@@ -2551,7 +2551,8 @@
         const latestEvent = state.data.events.find(
           (event) => event.boxId === box.id,
         );
-        const isOpened = box.status === "เปิดใช้งานแล้ว";
+        const effectiveStatus = autoBoxStatus_(box);
+        const isOpened = effectiveStatus === "เปิดใช้งานแล้ว";
         const cardState = isOpened
           ? "opened"
           : expiring.length
@@ -2618,7 +2619,7 @@
             (box) => `
         <tr>
           <td><b>${esc(box.boxCode)}</b><br><span class="muted">${esc(box.location || "-")}</span></td>
-          <td>${esc(box.kitName || "-")}</td><td>${statusPill(box.status)}</td><td>${box.items.length} รายการ</td><td>${esc(formatThaiDateBE(box.inspectionDate))}</td><td>${esc(formatDate(box.updatedAt))}</td>
+          <td>${esc(box.kitName || "-")}</td><td>${statusPill(autoBoxStatus_(box))}</td><td>${box.items.length} รายการ</td><td>${esc(formatThaiDateBE(box.inspectionDate))}</td><td>${esc(formatDate(box.updatedAt))}</td>
           <td class="actions icon-actions">${boxTableActionsHtml_(box)}</td>
         </tr>`,
           )
@@ -2656,7 +2657,12 @@
       }
 
       function autoBoxStatus_(box) {
-        return box && box.status === "เปิดใช้งานแล้ว" ? "เปิดใช้งานแล้ว" : "พร้อมใช้";
+        if (!box) return "ไม่พร้อมใช้";
+        if (box.status === "เปิดใช้งานแล้ว") return "เปิดใช้งานแล้ว";
+        const items = box.items || [];
+        if (!items.length) return "ไม่พร้อมใช้";
+        const incomplete = items.some((item) => !item.expiryDate || Number(item.qty || 0) <= 0);
+        return incomplete ? "ไม่พร้อมใช้" : "พร้อมใช้";
       }
 
       function renderKits() {
@@ -2823,7 +2829,7 @@
           uniqueHn: new Set(
             events.map((ev) => String(ev.hn || "").trim()).filter(Boolean),
           ).size,
-          readyBoxes: boxes.filter((box) => box.status === "พร้อมใช้").length,
+          readyBoxes: boxes.filter((box) => autoBoxStatus_(box) === "พร้อมใช้").length,
           expiryRiskTotal:
             expiryBuckets["หมดอายุแล้ว"] +
             expiryBuckets["ภายใน 30 วัน"] +
@@ -2834,7 +2840,7 @@
             12,
           ),
           statusSegments: objectToSegments_(
-            countBy_(boxes, (box) => box.status || "ไม่ระบุ"),
+            countBy_(boxes, (box) => autoBoxStatus_(box) || "ไม่ระบุ"),
             ["#217a57", "#b42318", "#a35b00", "#687386"],
           ),
           expirySegments: objectToSegments_(expiryBuckets, [
@@ -4474,7 +4480,7 @@
             ),
           )
           .join("");
-        return `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,'Noto Sans Thai',sans-serif;font-size:12pt}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #333;padding:5px;vertical-align:top}h1,h2{text-align:center}.small{font-size:10pt}</style></head><body><h1>แบบเก็บข้อมูลเชิงเทคนิค</h1><h2>โครงการวิจัย Smart Emergency Box (SEB)</h2><p>โรงพยาบาลลานสัก จังหวัดอุทัยธานี</p><h3>1.1 ข้อมูลการเปิดใช้กล่องยาฉุกเฉิน (Scan Log)</h3><table><thead><tr><th>ลำดับ</th><th>วันที่</th><th>เวลาสแกน QR</th><th>รหัสกล่องยา</th><th>แผนก</th><th>HN ผู้ป่วย</th><th>เวลาเภสัชกรรับทราบ</th><th>ระยะเวลาตอบสนอง (นาที)</th><th>เวลาเติมยาครบ</th><th>หมายเหตุ</th></tr></thead><tbody>${scanRows || emptyDocRow_(10)}</tbody></table><p class="small">ตัวชี้วัด: ระยะเวลาตอบสนอง = เวลาเภสัชกรรับทราบ - เวลาสแกน QR (เป้าหมาย ≤ 5 นาที)</p><h3>1.2 แบบบันทึกผลการตรวจสอบกล่องยาฉุกเฉินประจำเดือน</h3><table><thead><tr><th>ลำดับ</th><th>ชื่อยา</th><th>รูปแบบ</th><th>ความแรง</th><th>จำนวนที่ควรมี</th><th>จำนวนจริง</th><th>Lot No.</th><th>วันหมดอายุ</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead><tbody>${inspectionRows || emptyDocRow_(10)}</tbody></table><h3>1.3 แบบบันทึกเปรียบเทียบก่อน-หลังใช้ระบบ SEB</h3><table><thead><tr><th>ตัวชี้วัด</th><th>ก่อนใช้ระบบ SEB</th><th>หลังใช้ระบบ SEB</th><th>ผลต่าง</th></tr></thead><tbody><tr><td>ระยะเวลาเฉลี่ยที่เภสัชกรรับทราบการเปิดกล่องยา (นาที)</td><td></td><td></td><td></td></tr><tr><td>จำนวนครั้งที่ตรวจพบยาหมดอายุในกล่องยา</td><td></td><td>${esc((state.data.expiringItems || []).length)}</td><td></td></tr><tr><td>ร้อยละความครบถ้วนของการบันทึกข้อมูล (%)</td><td></td><td></td><td></td></tr><tr><td>เวลาที่ใช้สรุปรายงานประจำเดือน (ชั่วโมง)</td><td></td><td></td><td></td></tr><tr><td>จำนวนครั้งที่ระบบแจ้งเตือนยาใกล้หมดอายุ</td><td></td><td>${esc((state.data.expiringItems || []).length)}</td><td></td></tr><tr><td>จำนวนครั้งที่กล่องยาพร้อมใช้งาน 100%</td><td></td><td>${esc((state.data.boxes || []).filter((box) => box.status === "พร้อมใช้").length)}</td><td></td></tr></tbody></table></body></html>`;
+        return `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,'Noto Sans Thai',sans-serif;font-size:12pt}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #333;padding:5px;vertical-align:top}h1,h2{text-align:center}.small{font-size:10pt}</style></head><body><h1>แบบเก็บข้อมูลเชิงเทคนิค</h1><h2>โครงการวิจัย Smart Emergency Box (SEB)</h2><p>โรงพยาบาลลานสัก จังหวัดอุทัยธานี</p><h3>1.1 ข้อมูลการเปิดใช้กล่องยาฉุกเฉิน (Scan Log)</h3><table><thead><tr><th>ลำดับ</th><th>วันที่</th><th>เวลาสแกน QR</th><th>รหัสกล่องยา</th><th>แผนก</th><th>HN ผู้ป่วย</th><th>เวลาเภสัชกรรับทราบ</th><th>ระยะเวลาตอบสนอง (นาที)</th><th>เวลาเติมยาครบ</th><th>หมายเหตุ</th></tr></thead><tbody>${scanRows || emptyDocRow_(10)}</tbody></table><p class="small">ตัวชี้วัด: ระยะเวลาตอบสนอง = เวลาเภสัชกรรับทราบ - เวลาสแกน QR (เป้าหมาย ≤ 5 นาที)</p><h3>1.2 แบบบันทึกผลการตรวจสอบกล่องยาฉุกเฉินประจำเดือน</h3><table><thead><tr><th>ลำดับ</th><th>ชื่อยา</th><th>รูปแบบ</th><th>ความแรง</th><th>จำนวนที่ควรมี</th><th>จำนวนจริง</th><th>Lot No.</th><th>วันหมดอายุ</th><th>สถานะ</th><th>หมายเหตุ</th></tr></thead><tbody>${inspectionRows || emptyDocRow_(10)}</tbody></table><h3>1.3 แบบบันทึกเปรียบเทียบก่อน-หลังใช้ระบบ SEB</h3><table><thead><tr><th>ตัวชี้วัด</th><th>ก่อนใช้ระบบ SEB</th><th>หลังใช้ระบบ SEB</th><th>ผลต่าง</th></tr></thead><tbody><tr><td>ระยะเวลาเฉลี่ยที่เภสัชกรรับทราบการเปิดกล่องยา (นาที)</td><td></td><td></td><td></td></tr><tr><td>จำนวนครั้งที่ตรวจพบยาหมดอายุในกล่องยา</td><td></td><td>${esc((state.data.expiringItems || []).length)}</td><td></td></tr><tr><td>ร้อยละความครบถ้วนของการบันทึกข้อมูล (%)</td><td></td><td></td><td></td></tr><tr><td>เวลาที่ใช้สรุปรายงานประจำเดือน (ชั่วโมง)</td><td></td><td></td><td></td></tr><tr><td>จำนวนครั้งที่ระบบแจ้งเตือนยาใกล้หมดอายุ</td><td></td><td>${esc((state.data.expiringItems || []).length)}</td><td></td></tr><tr><td>จำนวนครั้งที่กล่องยาพร้อมใช้งาน 100%</td><td></td><td>${esc((state.data.boxes || []).filter((box) => autoBoxStatus_(box) === "พร้อมใช้").length)}</td><td></td></tr></tbody></table></body></html>`;
       }
       function buildSurveyQuestionnaireDocHtml_() {
         const q = surveyQuestions_();
