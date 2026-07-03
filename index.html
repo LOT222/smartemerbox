@@ -4507,7 +4507,7 @@
         byId("publicPage").classList.remove("hidden");
         try {
           const res = await server("apiPublicGetBox", BOOT.boxId, BOOT.token);
-          publicBox = { ...res.box, items: res.items };
+          publicBox = { ...res.box, items: (res.box && res.box.items) || res.items || [] };
           publicSettings = res.settings || {};
           updateDocumentTitle_(publicSettings);
           renderPublicMenu();

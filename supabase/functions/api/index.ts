@@ -124,7 +124,7 @@ async function apiLiveDashboard(token = "") {
 async function apiPublicGetBox(boxId: string, qrToken: string) {
   const box = await boxWithItems(boxId);
   if (!box || box.qrToken !== qrToken) throw new Error("QR ไม่ถูกต้องหรือหมดอายุ");
-  return { box, settings: await settingsObject(), appUrl: appUrl() };
+  return { box, items: box.items || [], settings: await settingsObject(), appUrl: appUrl() };
 }
 
 async function apiOpenBoxPublic(payload: any) {
