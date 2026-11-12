@@ -452,24 +452,24 @@
     const nd = nearDays();
     const dd = daysUntil(it.expiryDate);
     const color = !it.expiryDate ? "" : dd < 0 ? "color:var(--danger-text)" : dd <= nd ? "color:var(--warn-text)" : "";
-    return `<td><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" placeholder="Lot"></td>
-      <td><input class="input sm" type="date" data-f="expiryDate" value="${esc(it.expiryDate || "")}" style="${color}"></td>
-      <td><input class="input sm" type="number" min="0" data-f="qty" value="${esc(it.qty ?? 0)}" oninput="App.lotSum(this)"></td>`;
+    return `<td data-a="lot" data-l="Lot"><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" placeholder="Lot"></td>
+      <td data-a="exp" data-l="วันหมดอายุ"><input class="input sm" type="date" data-f="expiryDate" value="${esc(it.expiryDate || "")}" style="${color}"></td>
+      <td data-a="qty" data-l="จำนวน"><input class="input sm" type="number" min="0" data-f="qty" value="${esc(it.qty ?? 0)}" oninput="App.lotSum(this)"></td>`;
   }
   function lotRow(it = {}) {
-    return `<tr data-lot class="lot-sub"><td colspan="2"><span class="lot-tag">${ic("corner-down-right")} lot เพิ่ม</span></td>${lotCells(it)}<td></td><td></td>
-      <td class="nowrap"><span class="btn sm icon" style="visibility:hidden"></span><button class="btn ghost sm icon" title="ลบ lot นี้" onclick="App.delLot(this)">${ic("x")}</button></td></tr>`;
+    return `<tr data-lot class="lot-sub"><td colspan="2" data-a="tag"><span class="lot-tag">${ic("corner-down-right")} lot เพิ่ม</span></td>${lotCells(it)}<td class="m-hide"></td><td class="m-hide"></td>
+      <td class="nowrap" data-a="act"><span class="btn sm icon" style="visibility:hidden"></span><button class="btn ghost sm icon" title="ลบ lot นี้" onclick="App.delLot(this)">${ic("x")}</button></td></tr>`;
   }
   function drugGroup(lots = [{}]) {
     const h = lots[0] || {};
     const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
     return `<tbody data-drug>
-      <tr data-lot class="lot-head"><td><input class="input sm${drugKnown(h.drugName) ? "" : " warn-in"}" data-g="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(h.drugName || "")}"></td>
-        <td><input class="input sm" data-g="strength" value="${esc(h.strength || "")}"></td>
+      <tr data-lot class="lot-head"><td data-a="name" data-l="ชื่อยา"><input class="input sm${drugKnown(h.drugName) ? "" : " warn-in"}" data-g="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(h.drugName || "")}"></td>
+        <td data-a="str" data-l="ความแรง"><input class="input sm" data-g="strength" value="${esc(h.strength || "")}"></td>
         ${lotCells(h)}
-        <td><input class="input sm" type="number" min="0" data-g="requiredQty" value="${esc(req)}" title="จำนวนที่ควรมีรวมทุก lot" oninput="App.lotSum(this)"></td>
-        <td><input class="input sm" data-g="unit" list="unitList" value="${esc(h.unit || "")}"><input type="hidden" data-g="form" value="${esc(h.form || "")}"></td>
-        <td class="nowrap"><button class="btn ghost sm icon" title="เพิ่ม lot ของยานี้" onclick="App.dupItem(this)">${ic("plus")}</button><button class="btn ghost sm icon" title="ลบ" onclick="App.delLot(this)">${ic("x")}</button></td></tr>
+        <td data-a="req" data-l="ควรมี (รวม)"><input class="input sm" type="number" min="0" data-g="requiredQty" value="${esc(req)}" title="จำนวนที่ควรมีรวมทุก lot" oninput="App.lotSum(this)"></td>
+        <td data-a="unit" data-l="หน่วย"><input class="input sm" data-g="unit" list="unitList" value="${esc(h.unit || "")}"><input type="hidden" data-g="form" value="${esc(h.form || "")}"></td>
+        <td class="nowrap" data-a="act"><button class="btn ghost sm icon" title="เพิ่ม lot ของยานี้" onclick="App.dupItem(this)">${ic("plus")}</button><button class="btn ghost sm icon" title="ลบ" onclick="App.delLot(this)">${ic("x")}</button></td></tr>
       ${lots.slice(1).map(lotRow).join("")}
       ${sumRow(lots)}
     </tbody>`;
@@ -478,8 +478,8 @@
     const tot = lots.reduce((a, x) => a + Number(x.qty || 0), 0);
     const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
     const short = req && tot < req;
-    return `<tr class="lot-sum" ${lots.length > 1 ? "" : "hidden"}><td colspan="4" class="xs faint" style="text-align:right">รวม <span data-n>${lots.length}</span> lot</td>
-      <td class="tabnum" data-tot style="font-weight:650;${short ? "color:var(--danger-text)" : ""}">${tot}</td><td colspan="3" class="xs ${short ? "" : "faint"}" data-msg style="${short ? "color:var(--danger-text)" : ""}">${short ? `ขาด ${req - tot}` : req ? "ครบ" : ""}</td></tr>`;
+    return `<tr class="lot-sum" ${lots.length > 1 ? "" : "hidden"}><td colspan="4" class="xs faint" data-a="sl" style="text-align:right">รวม <span data-n>${lots.length}</span> lot</td>
+      <td class="tabnum" data-tot data-a="st" style="font-weight:650;${short ? "color:var(--danger-text)" : ""}">${tot}</td><td colspan="3" class="xs ${short ? "" : "faint"}" data-msg data-a="sm" style="${short ? "color:var(--danger-text)" : ""}">${short ? `ขาด ${req - tot}` : req ? "ครบ" : ""}</td></tr>`;
   }
   App.lotSum = (el) => {
     const tb = el.closest("tbody[data-drug]"); if (!tb) return;
@@ -637,11 +637,11 @@
       <div class="card"><div class="card-head"><div class="grow"><h3>${esc(b.boxCode)} · ${esc(b.location)}</h3><div class="xs faint">${esc(b.kitName || "")}</div></div><div id="insSummary" class="row wrap"></div></div>
         <div class="table-wrap"><table class="t compact" id="insTable"><thead><tr><th style="min-width:160px">ชื่อยา</th><th>ควรมี</th><th>จำนวนจริง</th><th>Lot</th><th>วันหมดอายุ</th><th>สถานะ</th></tr></thead><tbody>
         ${b.items.map((it, i) => `<tr data-ins="${i}" data-drug="${esc(it.drugName)}" data-strength="${esc(it.strength || "")}" data-form="${esc(it.form || "")}" data-req="${esc(it.requiredQty || 0)}">
-          <td><b>${esc(it.drugName)}</b> <span class="muted">${esc(it.strength || "")}</span></td><td class="tabnum">${esc(it.requiredQty || "–")}</td>
-          <td><input class="input sm" type="number" min="0" data-f="actualQty" value="${esc(it.qty ?? "")}" style="width:76px" oninput="App.insAuto(this)"></td>
-          <td><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" style="width:100px"></td>
-          <td><input class="input sm" type="date" data-f="expiryDate" value="${esc(it.expiryDate || "")}" oninput="App.insAuto(this)"></td>
-          <td><select class="input sm" data-f="status" onchange="this.dataset.manual=1;App.insSummary()">${opt([["normal", "ปกติ"], ["near", "ใกล้หมด"], ["expired", "หมดอายุ"], ["missing", "ขาด"]], autoStatus(it))}</select></td></tr>`).join("")}</tbody></table></div></div>
+          <td data-a="name"><b>${esc(it.drugName)}</b> <span class="muted">${esc(it.strength || "")}</span></td><td class="tabnum" data-a="req" data-l="ควรมี">${esc(it.requiredQty || "–")}</td>
+          <td data-a="qty" data-l="จำนวนจริง"><input class="input sm" type="number" min="0" data-f="actualQty" value="${esc(it.qty ?? "")}" style="width:76px" oninput="App.insAuto(this)"></td>
+          <td data-a="lot" data-l="Lot"><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" style="width:100px"></td>
+          <td data-a="exp" data-l="วันหมดอายุ"><input class="input sm" type="date" data-f="expiryDate" value="${esc(it.expiryDate || "")}" oninput="App.insAuto(this)"></td>
+          <td data-a="st" data-l="สถานะ"><select class="input sm" data-f="status" onchange="this.dataset.manual=1;App.insSummary()">${opt([["normal", "ปกติ"], ["near", "ใกล้หมด"], ["expired", "หมดอายุ"], ["missing", "ขาด"]], autoStatus(it))}</select></td></tr>`).join("")}</tbody></table></div></div>
       <div class="card card-pad mt-16"><div class="form-grid">
         ${field("เลขซีล", `<input class="input" id="insSeal" value="${esc(b.sealNo || "")}">`)}
         ${field("ปัญหาที่พบ (ถ้ามี)", `<input class="input" id="insNote" placeholder="แตะปุ่มด้านล่าง หรือพิมพ์เอง">`)}

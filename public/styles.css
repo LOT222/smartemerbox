@@ -838,3 +838,50 @@ html.dark .mt-ic { background: color-mix(in srgb, var(--mc) 22%, var(--surface))
 .pager { display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap; }
 .pager .btn.sm:not(.icon) { min-width: 32px; padding: 0 8px; }
 #boxHist .card-head { flex-wrap: wrap; row-gap: 8px; }
+
+/* v2.13.1 — มือถือ: กันเนื้อหาดันความกว้างเกินจอ + รายการยาเป็นการ์ดต่อยา */
+.split > *, .box-split > *, .col > * { min-width: 0; }
+.table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 1100px) { .split, .box-split { grid-template-columns: minmax(0, 1fr) !important; } }
+@media (max-width: 760px) {
+  #itemsTable, #itemsTable tbody { display: block; width: 100%; }
+  #itemsTable thead { display: none; }
+  #itemsTable { min-width: 0 !important; }
+  #itemsTable tbody[data-drug] { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; background: var(--surface); }
+  #itemsTable tbody[data-drug] + tbody[data-drug] tr:first-child td { border-top: 0; }
+  #itemsTable tr { display: grid; gap: 8px; padding: 0; }
+  #itemsTable tr.lot-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, .75fr); grid-template-areas: "name name act" "str unit req" "lot exp qty"; }
+  #itemsTable tr.lot-sub { grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, .75fr); grid-template-areas: "tag tag act" "lot exp qty"; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  #itemsTable tr.lot-sum { grid-template-columns: 1fr auto auto; grid-template-areas: "sl st sm"; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); align-items: center; }
+  #itemsTable tr.lot-sum[hidden] { display: none; }
+  #itemsTable td { display: block; padding: 0 !important; border: 0 !important; background: transparent !important; min-width: 0; }
+  #itemsTable td.m-hide { display: none; }
+  #itemsTable td[data-l]::before { content: attr(data-l); display: block; font-size: 11.5px; color: var(--text-3, #8a8796); margin-bottom: 3px; }
+  #itemsTable td[data-a="name"] { grid-area: name; } #itemsTable td[data-a="str"] { grid-area: str; } #itemsTable td[data-a="unit"] { grid-area: unit; }
+  #itemsTable td[data-a="req"] { grid-area: req; } #itemsTable td[data-a="lot"] { grid-area: lot; } #itemsTable td[data-a="exp"] { grid-area: exp; }
+  #itemsTable td[data-a="qty"] { grid-area: qty; } #itemsTable td[data-a="tag"] { grid-area: tag; align-self: center; }
+  #itemsTable td[data-a="act"] { grid-area: act; justify-self: end; align-self: end; display: flex; gap: 4px; }
+  #itemsTable td[data-a="act"] span[style*="hidden"] { display: none; }
+  #itemsTable td[data-a="act"] .btn.icon { width: 40px; height: 40px; border: 1px solid var(--border); }
+  #itemsTable td[data-a="sl"] { grid-area: sl; } #itemsTable td[data-a="st"] { grid-area: st; } #itemsTable td[data-a="sm"] { grid-area: sm; }
+  #itemsTable .input, #itemsTable input[type=date], #itemsTable input[type=number], #itemsTable [data-g], #itemsTable [data-f] { width: 100% !important; min-width: 0 !important; height: 40px; }
+  #itemsTable td:first-child .input { min-width: 0 !important; }
+  #itemsTable input[type=date] { padding: 0 6px; font-size: 16px; }
+  #itemsTable .lot-tag { padding-left: 0; font-size: 13px; }
+  .box-split .card-body:has(#itemsTable) { padding: 12px; }
+  .box-split .card-body:has(#itemsTable) .table-wrap { overflow: visible; }
+  .box-split .row.wrap > .btn, .box-split .card-pad > .row.wrap > .btn { flex: 1 1 calc(50% - 8px); justify-content: center; }
+  #boxHist .seg { width: 100%; } #boxHist .seg button { flex: 1; }
+}
+@media (max-width: 760px) {
+  #insTable, #insTable tbody { display: block; width: 100%; min-width: 0 !important; }
+  #insTable thead { display: none; }
+  #insTable tr { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr) minmax(0, 1.35fr); grid-template-areas: "name name req" "qty lot exp" "st st st"; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  #insTable td { display: block; padding: 0 !important; border: 0 !important; min-width: 0; background: transparent !important; }
+  #insTable td[data-l]::before { content: attr(data-l); display: block; font-size: 11.5px; color: var(--text-3, #8a8796); margin-bottom: 3px; }
+  #insTable td[data-a="name"] { grid-area: name; align-self: center; } #insTable td[data-a="req"] { grid-area: req; text-align: right; }
+  #insTable td[data-a="qty"] { grid-area: qty; } #insTable td[data-a="lot"] { grid-area: lot; } #insTable td[data-a="exp"] { grid-area: exp; } #insTable td[data-a="st"] { grid-area: st; }
+  #insTable .input { width: 100% !important; min-width: 0 !important; height: 40px; }
+  #insTable input[type=date] { padding: 0 6px; }
+  .card:has(#insTable) .table-wrap { overflow: visible; }
+}
