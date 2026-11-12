@@ -419,7 +419,20 @@
 
   App.saveBox = withBusy("#bxBtn", async (id) => {
     App.closeDrugSheet();
-    const reason = await dialog({ title: "เหตุผลการแก้ไข", body: "บันทึกไว้ใน audit log เพื่อการตรวจสอบย้อนหลัง", input: { placeholder: "เหตุผล", required: true, choices: optList("OPT_BOX_EDIT_REASONS") }, confirm: "บันทึก" });
+    App.itemFlags();
+    const probs = (App._issues || []).filter((x) => x.iss.list.length);
+    let reason;
+    if (probs.length) {
+      // มียาขาด/เกิน/หมดอายุ: แสดงรายการ และต้องระบุเหตุผลก่อนบันทึก
+      const lines = probs.map((x) => `<div class="dlg-iss"><b>${esc(x.name)}</b><div>${issBadges(x.iss)}</div></div>`).join("");
+      reason = await dialog({ title: `พบ ${probs.length} รายการที่ไม่ตรงมาตรฐาน`,
+        body: `${lines}<div class="small mt-12">ถ้าบันทึกผิด ให้กด "กลับไปแก้" · ถ้าตั้งใจ ให้ระบุเหตุผล (บันทึกใน audit log)</div>`,
+        input: { placeholder: "เหตุผลที่ยังไม่ตรงมาตรฐาน", required: true, choices: optList("OPT_QTY_MISMATCH_REASONS") }, confirm: "ยืนยันบันทึก", cancel: "กลับไปแก้" });
+      if (!reason) { App.goIssue(0); return; }
+      reason = `[ไม่ตรงมาตรฐาน] ${reason} — ${probs.map((x) => `${x.name}: ${x.iss.list.map((i) => i.t).join(", ")}`).join("; ")}`;
+    } else {
+      reason = await dialog({ title: "เหตุผลการแก้ไข", body: "บันทึกไว้ใน audit log เพื่อการตรวจสอบย้อนหลัง", input: { placeholder: "เหตุผล", required: true, choices: optList("OPT_BOX_EDIT_REASONS") }, confirm: "บันทึก" });
+    }
     if (!reason) return;
     const kit = D().kits.find((k) => k.id === val("bxKit"));
     const r = await api("apiSaveBox", S.token, { id, boxCode: val("bxCode"), locationId: val("bxLoc"), kitId: val("bxKit"), kitName: kit?.name || "", sealNo: val("bxSeal"), note: val("bxNote"), items: collectItems(), changeReason: reason });
@@ -454,11 +467,13 @@
     const out = [];
     if (minD < 0) out.push({ k: "exp", t: `หมดอายุแล้ว ${-minD} วัน` });
     else if (minD <= nd) out.push({ k: "near", t: minD === 0 ? "หมดอายุวันนี้" : `ใกล้หมดอายุ · อีก ${minD} วัน` });
-    if (req && tot < req) out.push({ k: "short", t: `ขาด ${req - tot}` });
-    const lv = out.some((x) => x.k === "exp") ? "exp" : out.some((x) => x.k === "near") ? "near" : out.length ? "short" : "";
+    if (req && tot < req) out.push({ k: "short", t: `ขาด ${req - tot} (มี ${tot}/${req})` });
+    if (req && tot > req) out.push({ k: "over", t: `เกิน ${tot - req} (มี ${tot}/${req})` });
+    const has = (k) => out.some((x) => x.k === k);
+    const lv = has("exp") ? "exp" : has("near") ? "near" : has("short") ? "short" : has("over") ? "over" : "";
     return { lv, list: out, tot, minD };
   }
-  const ISS_ICON = { exp: "alert-circle", near: "alert-triangle", short: "alert-triangle" };
+  const ISS_ICON = { exp: "alert-circle", near: "alert-triangle", short: "alert-triangle", over: "alert-triangle" };
   const issBadges = (iss) => iss.list.map((x) => `<span class="iss-badge iss-${x.k}">${ic(ISS_ICON[x.k])} ${x.t}</span>`).join("");
   const domLots = (tb) => [...tb.querySelectorAll("tr[data-lot]")].map((tr) => ({ lot: tr.querySelector('[data-f="lot"]').value.trim(), exp: tr.querySelector('[data-f="expiryDate"]').value, qty: Number(tr.querySelector('[data-f="qty"]').value || 0) }));
   // อัปเดตสี/ป้ายของแถวยาในตาราง + กล่องสรุปด้านบน (เรียกเมื่อโหลด และทุกครั้งที่แก้จำนวน/วันที่)
@@ -482,7 +497,7 @@
   function renderIssueBox(issues) {
     const el = $("#issBox"); if (!el) return;
     if (!issues.length) { el.innerHTML = `<div class="iss-ok">${ic("circle-check")} ยาทุกรายการครบและยังไม่ใกล้หมดอายุ</div>`; return; }
-    const rank = { exp: 0, near: 1, short: 2 };
+    const rank = { exp: 0, near: 1, short: 2, over: 3 };
     issues.sort((a, b) => rank[a.iss.lv] - rank[b.iss.lv] || (a.iss.minD || 0) - (b.iss.minD || 0));
     const nExp = issues.filter((x) => x.iss.lv === "exp").length;
     el.innerHTML = `<div class="iss-box ${nExp ? "lv-exp" : "lv-near"}">
@@ -533,9 +548,9 @@
   function sumRow(lots) {
     const tot = lots.reduce((a, x) => a + Number(x.qty || 0), 0);
     const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
-    const short = req && tot < req;
+    const short = req && tot < req, over = req && tot > req;
     return `<tr class="lot-sum" ${lots.length > 1 ? "" : "hidden"}><td colspan="4" class="xs faint" data-a="sl" style="text-align:right">รวม <span data-n>${lots.length}</span> lot</td>
-      <td class="tabnum" data-tot data-a="st" style="font-weight:650;${short ? "color:var(--danger-text)" : ""}">${tot}</td><td colspan="3" class="xs ${short ? "" : "faint"}" data-msg data-a="sm" style="${short ? "color:var(--danger-text)" : ""}">${short ? `ขาด ${req - tot}` : req ? "ครบ" : ""}</td></tr>`;
+      <td class="tabnum" data-tot data-a="st" style="font-weight:650;${short ? "color:var(--danger-text)" : ""}">${tot}</td><td colspan="3" class="xs ${short || over ? "" : "faint"}" data-msg data-a="sm" style="${short ? "color:var(--danger-text);font-weight:650" : over ? "color:#6d28d9;font-weight:650" : ""}">${short ? `ขาด ${req - tot}` : over ? `เกิน ${tot - req}` : req ? "ครบ" : ""}</td></tr>`;
   }
   App.lotSum = (el) => {
     const tb = el.closest("tbody[data-drug]"); if (!tb) return;
@@ -545,10 +560,11 @@
     const sr = tb.querySelector("tr.lot-sum");
     sr.hidden = lots.length < 2;
     sr.querySelector("[data-n]").textContent = lots.length;
-    const short = req && tot < req;
-    const t = sr.querySelector("[data-tot]"); t.textContent = tot; t.style.color = short ? "var(--danger-text)" : "";
-    const m = sr.querySelector("[data-msg]"); m.textContent = short ? `ขาด ${req - tot}` : req ? "ครบ" : ""; m.style.color = short ? "var(--danger-text)" : "";
-    m.classList.toggle("faint", !short);
+    const short = req && tot < req, over = req && tot > req;
+    const col = short ? "var(--danger-text)" : over ? "#6d28d9" : "";
+    const t = sr.querySelector("[data-tot]"); t.textContent = tot; t.style.color = col;
+    const m = sr.querySelector("[data-msg]"); m.textContent = short ? `ขาด ${req - tot}` : over ? `เกิน ${tot - req}` : req ? "ครบ" : ""; m.style.color = col; m.style.fontWeight = col ? "650" : "";
+    m.classList.toggle("faint", !col);
     App.itemFlags();
   };
   function itemsReadonly(items) {
@@ -585,7 +601,7 @@
       const iss = drugIssue(lots, req), tot = iss.tot;
       return `<button type="button" class="im-row" data-issue="${iss.lv}" onclick="App.editDrug(${i})">
         <div class="im-top"><div class="grow"><b>${esc(g("drugName") || "(ยังไม่ระบุชื่อ)")}</b> <span class="muted">${esc(g("strength"))}</span></div>
-          <span class="pill ${iss.list.some((x) => x.k === "short") ? "danger" : "ok"}">${tot}${req ? "/" + req : ""} ${esc(g("unit"))}</span>${ic("chevron-right")}</div>
+          <span class="pill ${iss.list.some((x) => x.k === "short") ? "danger" : iss.list.some((x) => x.k === "over") ? "over" : "ok"}">${tot}${req ? "/" + req : ""} ${esc(g("unit"))}</span>${ic("chevron-right")}</div>
         ${iss.list.length ? `<div class="im-iss">${issBadges(iss)}</div>` : ""}
         <div class="im-lots">${lots.map((x) => `<div class="im-lot"><span class="mono">${esc(x.lot || "ไม่ระบุ lot")}</span>${x.exp ? expPill(x.exp, nd) : `<span class="xs faint">ไม่ระบุวันหมดอายุ</span>`}<span class="tabnum">× ${x.qty}</span></div>`).join("")}</div>
       </button>`;

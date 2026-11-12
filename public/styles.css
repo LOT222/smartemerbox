@@ -971,3 +971,11 @@ html.dark #itemsTable tbody[data-issue="exp"] td, html.dark table.t tr[data-issu
 html.dark #itemsTable tbody[data-issue="near"] td, html.dark table.t tr[data-issue="near"] td, html.dark .im-row[data-issue="near"], html.dark .iss-box.lv-near { background: rgba(245, 158, 11, .15) !important; }
 html.dark .iss-item { background: rgba(255,255,255,.06); }
 #itemsTable .iss-badge { white-space: normal; max-width: 112px; line-height: 1.2; }
+/* v2.13.3 — เกินจำนวน + กล่องยืนยันก่อนบันทึก */
+.iss-over { background: #ede9fe; color: #5b21b6; border: 1px solid #c4b5fd; }
+.pill.over { background: #ede9fe; color: #5b21b6; }
+#itemsTable tbody[data-issue="over"] td { background: #faf7ff !important; }
+#itemsTable tbody[data-issue="over"] tr td:first-child { box-shadow: inset 5px 0 0 #8b5cf6; }
+.im-row[data-issue="over"] { border-left: 6px solid #8b5cf6; background: #faf7ff; }
+.dlg-iss { white-space: normal; padding: 8px 10px; border-radius: 8px; background: var(--surface-2, #f6f4f9); margin-top: 6px; color: var(--text); }
+.dlg-iss .iss-badge { margin-top: 4px; }

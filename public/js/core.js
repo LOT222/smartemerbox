@@ -147,6 +147,7 @@
     { key: "OPT_CANCEL_REASONS", icon: "circle-x", title: "เหตุผลการยกเลิกเคส", hint: "ตอนกดยกเลิกเคส", def: ["สแกน/บันทึกผิดกล่อง", "บันทึกซ้ำ", "ทดสอบระบบ", "สแกนโดยไม่ได้เปิดกล่องจริง"] },
     { key: "OPT_TIME_EDIT_REASONS", icon: "clock-edit", title: "เหตุผลการแก้ไขเวลาเปิดใช้", hint: "ตอนแก้เวลาเปิดใช้จริงของเคส", def: ["บันทึกหลังช่วยชีวิตเสร็จ", "กรอกเวลาผิด", "บันทึกจากแบบฟอร์มกระดาษ"] },
     { key: "OPT_BOX_EDIT_REASONS", icon: "pencil", title: "เหตุผลการแก้ไขรายการยาในกล่อง", hint: "บันทึกลง audit log ทุกครั้งที่แก้รายการยา", def: ["เปลี่ยน lot ยาใกล้หมดอายุ", "เติมยาที่ขาด", "ปรับรายการตามชุดมาตรฐาน", "แก้ข้อมูลที่บันทึกผิด"] },
+    { key: "OPT_QTY_MISMATCH_REASONS", icon: "alert-triangle", title: "เหตุผลเมื่อจำนวน/วันหมดอายุไม่ตรงมาตรฐาน", hint: "ถามก่อนบันทึก เมื่อมียาขาด เกิน หรือหมดอายุ", def: ["ยาในคลังไม่พอ รอเบิกเติม", "รอ lot ใหม่มาเปลี่ยน", "เติมเกินชั่วคราว จะเก็บคืนห้องยา", "ค่า \"ควรมี\" ยังไม่ได้ปรับตามชุดใหม่", "ใช้ยาไปแล้ว รอเติม"] },
     { key: "OPT_INSPECT_PROBLEMS", icon: "clipboard-check", title: "ปัญหาที่พบตอนตรวจกล่อง", hint: "ปุ่มลัดในฟอร์มตรวจประจำเดือน (เลือกได้หลายข้อ)", def: ["ยาขาด เติมแล้ว", "ยาหมดอายุ เปลี่ยนแล้ว", "ยาใกล้หมดอายุ แจ้งเปลี่ยน", "ซีลขาด/เลขไม่ตรง", "กล่องชำรุด"] },
     { key: "OPT_DRUG_NAMES", icon: "pill", title: "รายการยากลาง", hint: "ชื่อยาที่ใช้ในกล่องและชุดยามาตรฐาน · รูปแบบต่อบรรทัด: ชื่อยา | ความแรง | หน่วย (ความแรง/หน่วยไม่บังคับ) · เลือกแล้วกรอกความแรงและหน่วยให้อัตโนมัติ", def: [], importable: true },
     { key: "OPT_DRUG_UNITS", icon: "pill", title: "หน่วยยา", hint: "ตัวเลือกช่องหน่วยในรายการยาและชุดยามาตรฐาน", def: ["amp", "vial", "tab", "bottle", "syringe", "bag", "ชิ้น"] },
@@ -196,9 +197,9 @@
   const expPill = (date, nearDays) => {
     const d = daysUntil(date);
     if (!date) return `<span class="pill">ไม่ระบุ</span>`;
-    if (d < 0) return `<span class="pill danger">หมดอายุ</span>`;
-    if (d <= nearDays) return `<span class="pill warn">${d} วัน</span>`;
-    return `<span class="pill ok plain">${fmtD(date)}</span>`;
+    if (d < 0) return `<span class="pill danger">${fmtDLong(date)} · หมดอายุ</span>`;
+    if (d <= nearDays) return `<span class="pill warn">${fmtDLong(date)} · ${d} วัน</span>`;
+    return `<span class="pill ok plain">${fmtDLong(date)}</span>`;
   };
   const nearDays = () => Number(S.data?.settings?.NEAR_EXPIRY_DAYS || 30);
   const isStaff = () => S.user && ["admin", "pharmacist", "technician"].includes(S.user.role);
@@ -372,12 +373,13 @@
     const h = `onchange="SEB.dateSync(this)${onch ? ";" + onch : ""}"`;
     const dd = daysUntil(v), st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
     return `<span class="dsel" data-st="${st}"><input type="hidden" ${attrs} value="${v}">
-      <select class="input sm" data-p="d" aria-label="วัน" ${h}>${o("", "วัน", d)}${Array.from({ length: 31 }, (_, i) => { const t = String(i + 1).padStart(2, "0"); return o(t, String(i + 1), d); }).join("")}</select>
-      <select class="input sm" data-p="m" aria-label="เดือน" ${h}>${o("", "เดือน", m)}${EN_M.map((n, i) => { const t = String(i + 1).padStart(2, "0"); return o(t, `${n} (${i + 1})`, m); }).join("")}</select>
+      <select class="input sm" data-p="d" aria-label="วัน" ${h}>${o("", "วว", d)}${Array.from({ length: 31 }, (_, i) => { const t = String(i + 1).padStart(2, "0"); return o(t, t, d); }).join("")}</select>
+      <select class="input sm" data-p="m" aria-label="เดือน" ${h}>${o("", "ดด", m)}${EN_M.map((n, i) => { const t = String(i + 1).padStart(2, "0"); return o(t, `${t} (${n})`, m); }).join("")}</select>
       <select class="input sm" data-p="y" aria-label="ปี ค.ศ." ${h}>${o("", "ปี ค.ศ.", y)}${years.map((t) => o(t, t, y)).join("")}</select>
-      <small class="dsel-th">${v ? "= " + fmtDLong(v) : ""}</small></span>`;
+      <small class="dsel-th">${v ? "พ.ศ. " + fmtDLong(v) : "กรอกปีเป็น ค.ศ."}</small></span>`;
   }
-  function fmtDLong(v) { const d = new Date(v + "T00:00:00"); return isNaN(d) ? "" : `${d.getDate()} ${TH_M[d.getMonth()]} ${d.getFullYear() + 543}`; }
+  // วันหมดอายุแสดงเป็น วว/ดด/ปี พ.ศ.
+  function fmtDLong(v) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || "")); return m ? `${m[3]}/${m[2]}/${+m[1] + 543}` : ""; }
   function dateSync(sel) {
     const w = sel.closest(".dsel"); if (!w) return;
     const g = (p) => w.querySelector(`[data-p="${p}"]`);
@@ -391,7 +393,7 @@
     w.querySelector('input[type="hidden"]').value = v;
     const dd = daysUntil(v);
     w.dataset.st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
-    w.querySelector(".dsel-th").textContent = v ? "= " + fmtDLong(v) : (d || m || y ? "เลือกให้ครบ วัน / เดือน / ปี" : "");
+    w.querySelector(".dsel-th").textContent = v ? "พ.ศ. " + fmtDLong(v) : (d || m || y ? "เลือกให้ครบ วว / ดด / ปี" : "กรอกปีเป็น ค.ศ.");
   }
 
   // ---------------- export ----------------
