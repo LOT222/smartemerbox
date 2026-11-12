@@ -979,3 +979,58 @@ html.dark .iss-item { background: rgba(255,255,255,.06); }
 .im-row[data-issue="over"] { border-left: 6px solid #8b5cf6; background: #faf7ff; }
 .dlg-iss { white-space: normal; padding: 8px 10px; border-radius: 8px; background: var(--surface-2, #f6f4f9); margin-top: 6px; color: var(--text); }
 .dlg-iss .iss-badge { margin-top: 4px; }
+
+/* v2.13.4 — การ์ดรายการยา (มือถือ) จัดคอลัมน์ตรงกัน · สีเฉพาะจุดที่มีปัญหา */
+@media (max-width: 760px) {
+  .items-m { gap: 8px; }
+  .im-head, .im-lot { display: grid; grid-template-columns: minmax(0, 1fr) 96px 44px; column-gap: 10px; align-items: center; }
+  .im-head { padding: 0 34px 0 16px; font-size: 11.5px; color: var(--text-3, #8a8796); }
+  .im-head span:nth-child(2), .im-head span:nth-child(3) { text-align: right; }
+  .im-row, .im-row[data-issue] { border: 1px solid var(--border); border-left: 1px solid var(--border); background: var(--surface); padding: 12px 34px 12px 16px; position: relative; box-shadow: none; border-radius: 12px; }
+  .im-row[data-issue="exp"] { box-shadow: inset 4px 0 0 #dc2626; border-color: #fca5a5; }
+  .im-row[data-issue="near"] { box-shadow: inset 4px 0 0 #f59e0b; border-color: #fcd34d; }
+  .im-row[data-issue="short"] { box-shadow: inset 4px 0 0 #ef4444; }
+  .im-row[data-issue="over"] { box-shadow: inset 4px 0 0 #8b5cf6; }
+  .im-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: baseline; }
+  .im-top > .ti { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); opacity: .35; }
+  .im-name { min-width: 0; line-height: 1.35; }
+  .im-name b { font-weight: 650; }
+  .im-q { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-2); }
+  .im-q b { color: var(--text); font-weight: 650; } .im-q small { color: var(--text-3, #8a8796); }
+  .im-q.q-short, .im-q.q-short b { color: #b91c1c; } .im-q.q-over, .im-q.q-over b { color: #6d28d9; }
+  .im-iss { margin-top: 4px; }
+  .im-lots { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); gap: 5px; }
+  .im-lot { font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .im-l { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .im-e, .im-n { text-align: right; }
+  .im-n { color: var(--text); font-weight: 600; }
+  .im-e.e-near { color: #b45309; font-weight: 700; } .im-e.e-exp { color: #b91c1c; font-weight: 700; }
+}
+
+/* ช่องวันที่ + ปฏิทินแผ่นล่าง */
+.dsel.dpick { display: block; min-width: 0; }
+.dpick-btn { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; text-align: left; cursor: pointer; font-variant-numeric: tabular-nums; background: var(--surface); }
+.dpick-btn .ti { opacity: .5; flex: none; }
+.dpick .dsel-th { display: block; margin-top: 2px; font-size: 11.5px; color: var(--text-3, #8a8796); }
+.dpick[data-st="near"] .dpick-btn { border-color: #f59e0b; color: #92400e; font-weight: 650; }
+.dpick[data-st="exp"] .dpick-btn { border-color: #dc2626; color: #b91c1c; font-weight: 650; }
+#itemsTable td[data-a="exp"], #itemsTable .dsel { min-width: 140px !important; }
+.dp-back { position: fixed; inset: 0; z-index: 120; background: rgba(20, 16, 30, .42); display: flex; align-items: flex-end; justify-content: center; animation: sbFade .15s ease; }
+@media (min-width: 761px) { .dp-back { align-items: center; } .dp-sheet { border-radius: 18px !important; } }
+.dp-sheet { background: var(--surface); width: min(440px, 100%); border-radius: 20px 20px 0 0; padding: 8px 16px calc(14px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 30px rgba(0,0,0,.2); animation: sbUp .2s ease; }
+.dp-grab { width: 44px; height: 5px; border-radius: 9px; background: var(--border); margin: 2px auto 10px; }
+.dp-nav { display: grid; grid-template-columns: 44px minmax(0, 1fr) 104px 44px; gap: 8px; }
+.dp-nav .btn.icon { width: 44px; height: 44px; border: 1px solid var(--border); }
+.dp-nav select.input { height: 44px; font-size: 16px; font-weight: 600; }
+.dp-title { margin: 12px 2px 6px; font-size: 16px; }
+.dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.dp-w { font-size: 12px; color: var(--text-3, #8a8796); padding: 6px 0; font-weight: 600; } .dp-w.sun { color: #dc2626; }
+.dp-d { height: 46px; border: 0; background: transparent; border-radius: 12px; font: inherit; font-size: 17px; font-weight: 550; color: var(--text); cursor: pointer; font-variant-numeric: tabular-nums; }
+.dp-d:hover { background: var(--surface-2, #f3f1f7); }
+.dp-d.out { color: var(--text-3, #b8b5c2); font-weight: 400; }
+.dp-d.today { box-shadow: inset 0 0 0 2px #3b5bdb; color: #3b5bdb; }
+.dp-d.sel { background: #3b5bdb; color: #fff; box-shadow: none; }
+.dp-foot { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; margin-top: 12px; }
+.dp-foot .btn { height: 46px; justify-content: center; font-size: 15px; }
+.dp-foot .btn:first-child { color: #3b5bdb; border-color: #3b5bdb; }
+.dp-note { text-align: center; font-size: 12px; color: var(--text-3, #8a8796); margin-top: 8px; }

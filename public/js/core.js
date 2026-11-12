@@ -365,40 +365,84 @@
   const EN_M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   function dateSel(attrs, iso, onch) {
     const v = /^\d{4}-\d{2}-\d{2}/.test(String(iso || "")) ? String(iso).slice(0, 10) : "";
-    const [y, m, d] = v ? v.split("-") : ["", "", ""];
-    const Y = new Date().getFullYear();
-    const years = []; for (let i = Y - 3; i <= Y + 12; i++) years.push(String(i));
-    if (y && !years.includes(y)) years.push(y), years.sort();
-    const o = (val, txt, cur) => `<option value="${val}"${val === cur ? " selected" : ""}>${txt}</option>`;
-    const h = `onchange="SEB.dateSync(this)${onch ? ";" + onch : ""}"`;
     const dd = daysUntil(v), st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
-    return `<span class="dsel" data-st="${st}"><input type="hidden" ${attrs} value="${v}">
-      <select class="input sm" data-p="d" aria-label="วัน" ${h}>${o("", "วว", d)}${Array.from({ length: 31 }, (_, i) => { const t = String(i + 1).padStart(2, "0"); return o(t, t, d); }).join("")}</select>
-      <select class="input sm" data-p="m" aria-label="เดือน" ${h}>${o("", "ดด", m)}${EN_M.map((n, i) => { const t = String(i + 1).padStart(2, "0"); return o(t, `${t} (${n})`, m); }).join("")}</select>
-      <select class="input sm" data-p="y" aria-label="ปี ค.ศ." ${h}>${o("", "ปี ค.ศ.", y)}${years.map((t) => o(t, t, y)).join("")}</select>
-      <small class="dsel-th">${v ? "พ.ศ. " + fmtDLong(v) : "กรอกปีเป็น ค.ศ."}</small></span>`;
+    return `<span class="dsel dpick" data-st="${st}"><input type="hidden" ${attrs} value="${v}">
+      <button type="button" class="input sm dpick-btn" data-onch="${esc(onch || "")}" onclick="SEB.datePick(this)"><span class="dpick-v">${v ? fmtCE(v) : `<span class="faint">วว/ดด/ปปปป</span>`}</span>${ic("calendar")}</button>
+      <small class="dsel-th">${v ? "พ.ศ. " + fmtDLong(v) : ""}</small></span>`;
   }
-  // วันหมดอายุแสดงเป็น วว/ดด/ปี พ.ศ.
-  function fmtDLong(v) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || "")); return m ? `${m[3]}/${m[2]}/${+m[1] + 543}` : ""; }
-  function dateSync(sel) {
-    const w = sel.closest(".dsel"); if (!w) return;
-    const g = (p) => w.querySelector(`[data-p="${p}"]`);
-    let d = g("d").value; const m = g("m").value, y = g("y").value;
-    let v = "";
-    if (d && m && y) {
-      const last = new Date(+y, +m, 0).getDate();               // กันวันที่ 31 ในเดือนที่มี 30 วัน
-      if (+d > last) { d = String(last).padStart(2, "0"); g("d").value = d; }
-      v = `${y}-${m}-${d}`;
+  const fmtCE = (v) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || "")); return m ? `${m[3]}/${m[2]}/${m[1]}` : ""; };
+  const iso = (y, m, d) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  // ปฏิทินแบบแผ่นล่าง: เดือน "Nov (11)" · ปี ค.ศ. · แตะวันเพื่อเลือก
+  let DP = null;
+  function datePick(btn) {
+    const w = btn.closest(".dpick"); if (!w) return;
+    const v = w.querySelector('input[type="hidden"]').value;
+    const base = v ? new Date(v + "T00:00:00") : new Date();
+    DP = { w, btn, y: base.getFullYear(), m: base.getMonth() + 1 };
+    document.querySelector(".dp-back")?.remove();
+    const el = document.createElement("div");
+    el.className = "dp-back";
+    el.addEventListener("click", (e) => { if (e.target === el) dpClose(); });
+    document.body.append(el);
+    dpRender();
+  }
+  function dpRender() {
+    const el = document.querySelector(".dp-back"); if (!el || !DP) return;
+    const { y, m } = DP;
+    const cur = DP.w.querySelector('input[type="hidden"]').value;
+    const today = todayStr();
+    const first = new Date(y, m - 1, 1).getDay();
+    const days = new Date(y, m, 0).getDate(), prevDays = new Date(y, m - 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < 42; i++) {
+      const n = i - first + 1;
+      let yy = y, mm = m, d = n, out = false;
+      if (n < 1) { mm = m - 1; d = prevDays + n; out = true; } else if (n > days) { mm = m + 1; d = n - days; out = true; }
+      if (mm < 1) { mm = 12; yy--; } if (mm > 12) { mm = 1; yy++; }
+      const val = iso(yy, mm, d);
+      if (i >= 35 && n > days && i % 7 === 0) break;             // ไม่แสดงแถวที่ 6 ถ้าเป็นเดือนถัดไปทั้งแถว
+      cells.push(`<button type="button" class="dp-d${out ? " out" : ""}${val === cur ? " sel" : ""}${val === today ? " today" : ""}${i % 7 === 0 ? " sun" : ""}" onclick="SEB.dpSet('${val}')">${d}</button>`);
     }
-    w.querySelector('input[type="hidden"]').value = v;
+    const Y = new Date().getFullYear();
+    const ys = []; for (let i = Math.min(Y - 5, y); i <= Math.max(Y + 15, y); i++) ys.push(i);
+    el.innerHTML = `<div class="dp-sheet" role="dialog" aria-label="เลือกวันที่"><div class="dp-grab"></div>
+      <div class="dp-nav"><button type="button" class="btn icon" onclick="SEB.dpMove(-1)" title="เดือนก่อน">${ic("chevron-left")}</button>
+        <select class="input" onchange="SEB.dpMove(0,+this.value)">${EN_M.map((n, i) => `<option value="${i + 1}"${i + 1 === m ? " selected" : ""}>${n} (${i + 1})</option>`).join("")}</select>
+        <select class="input dp-y" onchange="SEB.dpMove(0,0,+this.value)">${ys.map((x) => `<option${x === y ? " selected" : ""}>${x}</option>`).join("")}</select>
+        <button type="button" class="btn icon" onclick="SEB.dpMove(1)" title="เดือนถัดไป">${ic("chevron-right")}</button></div>
+      <div class="dp-title"><b>${EN_M[m - 1]} (${m}) ${y}</b><span class="faint"> · ค.ศ. (พ.ศ. ${y + 543})</span></div>
+      <div class="dp-grid">${["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d, i) => `<span class="dp-w${i === 0 ? " sun" : ""}">${d}</span>`).join("")}${cells.join("")}</div>
+      <div class="dp-foot"><button type="button" class="btn" onclick="SEB.dpSet('${today}')">วันนี้ · Today</button><button type="button" class="btn" onclick="SEB.dpSet('')">ล้าง</button><button type="button" class="btn" onclick="SEB.dpClose()">ปิด</button></div>
+      <div class="dp-note">เลือก/กรอกเป็น ค.ศ. · ระบบแสดงผลเป็น พ.ศ.</div></div>`;
+  }
+  function dpMove(step, month, year) {
+    if (!DP) return;
+    if (month) DP.m = month;
+    if (year) DP.y = year;
+    if (step) { DP.m += step; if (DP.m < 1) { DP.m = 12; DP.y--; } if (DP.m > 12) { DP.m = 1; DP.y++; } }
+    dpRender();
+  }
+  function dpSet(v) {
+    if (!DP) return;
+    const { w, btn } = DP;
+    const hid = w.querySelector('input[type="hidden"]');
+    hid.value = v;
+    w.querySelector(".dpick-v").innerHTML = v ? fmtCE(v) : `<span class="faint">วว/ดด/ปปปป</span>`;
+    w.querySelector(".dsel-th").textContent = v ? "พ.ศ. " + fmtDLong(v) : "";
     const dd = daysUntil(v);
     w.dataset.st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
-    w.querySelector(".dsel-th").textContent = v ? "พ.ศ. " + fmtDLong(v) : (d || m || y ? "เลือกให้ครบ วว / ดด / ปี" : "กรอกปีเป็น ค.ศ.");
+    dpClose();
+    const f = btn.dataset.onch;
+    if (f) { try { new Function(f).call(hid); } catch (e) { console.error(e); } }
   }
+  function dpClose() { document.querySelector(".dp-back")?.remove(); DP = null; }
+  function dateSync() {}
+  function fmtDLong(v) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || "")); return m ? `${m[3]}/${m[2]}/${+m[1] + 543}` : ""; }
+
 
   // ---------------- export ----------------
   window.SEB = {
-    S, api, DEMO, IDLE_MS, Q, dateSel, dateSync, fmtDLong,
+    S, api, DEMO, IDLE_MS, Q, dateSel, dateSync, fmtDLong, fmtCE, datePick, dpMove, dpSet, dpClose,
     APP_VERSION, getTheme, setTheme, esc, ic, $, $$, val, fmtD, fmtT, fmtDT, ago, minutes, fmtMin, localInput, todayStr, daysUntil, initials, sum, uid, download, toCsv,
     BOX_STATE, CASE_STATE, ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, LOGO_B, HOSP_LOGO, hospLogoAbs, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, isRealAdmin, withSim, LOGO,
     toast, fail, dialog, drawer, closeDrawer, kpi, empty, field, opt, renderShell, renderNav, setTitle, TITLES,

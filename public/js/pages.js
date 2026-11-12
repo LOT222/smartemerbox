@@ -594,16 +594,18 @@
     const el = $("#itemsM"); if (!el) return;
     const nd = nearDays();
     const tbs = $$("#itemsTable tbody[data-drug]");
-    el.innerHTML = tbs.length ? tbs.map((tb, i) => {
+    el.innerHTML = tbs.length ? `<div class="im-head"><span>Lot</span><span>หมดอายุ (พ.ศ.)</span><span>จำนวน</span></div>` + tbs.map((tb, i) => {
       const g = (f) => (tb.querySelector(`[data-g="${f}"]`)?.value || "").trim();
       const lots = [...tb.querySelectorAll("tr[data-lot]")].map((tr) => ({ lot: tr.querySelector('[data-f="lot"]').value.trim(), exp: tr.querySelector('[data-f="expiryDate"]').value, qty: Number(tr.querySelector('[data-f="qty"]').value || 0) }));
       const req = Number(g("requiredQty") || 0);
       const iss = drugIssue(lots, req), tot = iss.tot;
+      const nd2 = nearDays();
+      const qcls = iss.list.some((x) => x.k === "short") ? "q-short" : iss.list.some((x) => x.k === "over") ? "q-over" : "";
       return `<button type="button" class="im-row" data-issue="${iss.lv}" onclick="App.editDrug(${i})">
-        <div class="im-top"><div class="grow"><b>${esc(g("drugName") || "(ยังไม่ระบุชื่อ)")}</b> <span class="muted">${esc(g("strength"))}</span></div>
-          <span class="pill ${iss.list.some((x) => x.k === "short") ? "danger" : iss.list.some((x) => x.k === "over") ? "over" : "ok"}">${tot}${req ? "/" + req : ""} ${esc(g("unit"))}</span>${ic("chevron-right")}</div>
+        <div class="im-top"><div class="im-name"><b>${esc(g("drugName") || "(ยังไม่ระบุชื่อ)")}</b> <span class="muted">${esc(g("strength"))}</span></div>
+          <div class="im-q ${qcls}"><b>${tot}</b>${req ? `<span>/${req}</span>` : ""} <small>${esc(g("unit"))}</small></div>${ic("chevron-right")}</div>
         ${iss.list.length ? `<div class="im-iss">${issBadges(iss)}</div>` : ""}
-        <div class="im-lots">${lots.map((x) => `<div class="im-lot"><span class="mono">${esc(x.lot || "ไม่ระบุ lot")}</span>${x.exp ? expPill(x.exp, nd) : `<span class="xs faint">ไม่ระบุวันหมดอายุ</span>`}<span class="tabnum">× ${x.qty}</span></div>`).join("")}</div>
+        <div class="im-lots">${lots.map((x) => { const d = daysUntil(x.exp); const c = !x.exp ? "" : d < 0 ? "e-exp" : d <= nd2 ? "e-near" : ""; return `<div class="im-lot"><span class="im-l">${esc(x.lot || "–")}</span><span class="im-e ${c}">${x.exp ? fmtDLong(x.exp) : "–"}</span><span class="im-n">${x.qty}</span></div>`; }).join("")}</div>
       </button>`;
     }).join("") : empty("ยังไม่มีรายการยา", "pill-off");
   };
