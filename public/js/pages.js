@@ -331,7 +331,6 @@
     const b = boxById(S.param);
     if (!b) { $("#content").innerHTML = empty("ไม่พบกล่องยา", "box-off"); return; }
     setTitle(b.boxCode, `<button class="btn ghost" onclick="App.go('boxes')">${ic("arrow-left")} <span class="desktop-only">กล่องทั้งหมด</span></button>`);
-    const events = D().events.filter((e) => e.boxId === b.id).slice(0, 6);
     const qrSvg = qrSvgFor(b.qrUrl, 3);
     $("#content").innerHTML = `
       <div class="split box-split">
@@ -345,12 +344,11 @@
             </div>
           </div>
           <div class="card">
-        <div class="card-head"><h3 class="grow">รายการยาในกล่อง</h3><span class="xs faint">${b.items.length} รายการ (แยก lot)</span></div>
+        <div class="card-head"><h3 class="grow">รายการยาในกล่อง</h3><span class="xs faint">${groupDrugs(b.items).length} รายการยา · ${b.items.length} lot</span></div>
         <div class="card-body">${isStaff() ? itemsEditor(b.items) : itemsReadonly(b.items)}</div>
         ${isStaff() ? `<div class="card-body row" style="border-top:1px solid var(--border);justify-content:flex-end"><button class="btn primary" onclick="App.saveBox('${b.id}')">บันทึกรายการยา</button></div>` : ""}
       </div>
-          <div class="card"><div class="card-head"><h3 class="grow">ประวัติการเปิด</h3></div>
-            ${events.length ? events.map((e) => `<div class="list-row click" onclick="App.go('case','${e.id}')"><div class="grow"><div class="small" style="font-weight:550">${fmtDT(e.actualOpenedAt)}</div><div class="xs faint">${esc(e.reasonCategory || "")} · ${esc(e.eventCode || "")}</div></div>${casePill(e)}</div>`).join("") : empty("ยังไม่เคยถูกเปิด", "history-off")}</div>
+          <div class="card" id="boxHist"></div>
         </div>
         <div class="col gap-16 box-side">
           <div class="card card-pad center">
@@ -373,6 +371,49 @@
             <div class="row mt-16" style="justify-content:flex-end">${isAdmin() ? `<button class="btn danger-ghost" onclick="App.deleteBox('${b.id}')">${ic("trash")} ลบกล่อง</button>` : ""}<span class="grow"></span><button class="btn primary" id="bxBtn" onclick="App.saveBox('${b.id}')">บันทึกการเปลี่ยนแปลง</button></div></div>` : ""}
         </div>
       </div>`;
+    if (S.histBox !== b.id) { S.histBox = b.id; S.histPage = 1; S.histAll = null; }
+    App.boxHist();
+  };
+
+  // ---------- ประวัติการเปิด: เลือก 10/30/50/ทั้งหมด + เลื่อนหน้า ----------
+  const HIST_SIZES = [10, 30, 50, 0];          // 0 = ทั้งหมด
+  App.boxHist = async (patch) => {
+    const el = $("#boxHist"); if (!el) return;
+    const id = S.histBox;
+    if (patch) Object.assign(S, patch);
+    let size = S.histSize ?? (+localStorage.getItem("seb_hist_size") || 10);
+    if (!HIST_SIZES.includes(size)) size = 10;
+    S.histSize = size;
+    try { localStorage.setItem("seb_hist_size", String(size)); } catch (_) {}
+    // ข้อมูลในเครื่องเก็บการเปิด 400 ครั้งล่าสุดของทั้งระบบ — ถ้าเต็มโควตา ให้ดึงประวัติเต็มของกล่องนี้จากเซิร์ฟเวอร์
+    let all = S.histAll || D().events.filter((e) => e.boxId === id);
+    const truncated = !S.histAll && D().events.length >= 400;
+    if (truncated && (size === 0 || all.length > 0 && Math.ceil(all.length / (size || all.length)) <= (S.histPage || 1))) {
+      el.innerHTML = `<div class="card-head"><h3 class="grow">ประวัติการเปิด</h3></div><div class="card-body xs faint">กำลังโหลดประวัติทั้งหมด…</div>`;
+      try {
+        const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+        const r = await api("apiReport", S.token, "2015-01-01", today);
+        if (S.histBox !== id) return;
+        S.histAll = all = (r.events || []).filter((e) => e.boxId === id).sort((x, y) => String(y.actualOpenedAt).localeCompare(String(x.actualOpenedAt)));
+      } catch (_) { /* ใช้ข้อมูลในเครื่องแทน */ }
+    }
+    const total = all.length;
+    const pages = size ? Math.max(1, Math.ceil(total / size)) : 1;
+    const page = Math.min(Math.max(1, S.histPage || 1), pages);
+    S.histPage = page;
+    const rows = size ? all.slice((page - 1) * size, page * size) : all;
+    const seg = `<div class="seg">${HIST_SIZES.map((n) => `<button type="button" class="${n === size ? "on" : ""}" onclick="App.boxHist({histSize:${n},histPage:1})">${n || "ทั้งหมด"}</button>`).join("")}</div>`;
+    // ปุ่มเลขหน้า: แสดงหน้าแรก/สุดท้าย และรอบ ๆ หน้าปัจจุบัน
+    const nums = [];
+    for (let i = 1; i <= pages; i++) if (i === 1 || i === pages || Math.abs(i - page) <= 1) nums.push(i); else if (nums[nums.length - 1] !== "…") nums.push("…");
+    const pager = pages > 1 ? `<div class="pager">
+        <button class="btn ghost sm icon" ${page <= 1 ? "disabled" : ""} onclick="App.boxHist({histPage:${page - 1}})" title="ก่อนหน้า">${ic("chevron-left")}</button>
+        ${nums.map((n) => n === "…" ? `<span class="xs faint">…</span>` : `<button class="btn sm ${n === page ? "primary" : "ghost"}" onclick="App.boxHist({histPage:${n}})">${n}</button>`).join("")}
+        <button class="btn ghost sm icon" ${page >= pages ? "disabled" : ""} onclick="App.boxHist({histPage:${page + 1}})" title="ถัดไป">${ic("chevron-right")}</button></div>` : "";
+    const from = total ? (size ? (page - 1) * size + 1 : 1) : 0, to = size ? Math.min(total, page * size) : total;
+    el.innerHTML = `<div class="card-head wrap gap-8"><h3 class="grow">ประวัติการเปิด <span class="xs faint" style="font-weight:400">${total ? `${from}–${to} จาก ${total} ครั้ง` : ""}</span></h3>${total > 10 ? seg : ""}</div>
+      ${rows.length ? rows.map((e) => `<div class="list-row click" onclick="App.go('case','${e.id}')"><div class="grow"><div class="small" style="font-weight:550">${fmtDT(e.actualOpenedAt)}</div><div class="xs faint">${esc(e.reasonCategory || "")} · ${esc(e.eventCode || "")}</div></div>${casePill(e)}</div>`).join("") : empty("ยังไม่เคยถูกเปิด", "history-off")}
+      ${pager ? `<div class="card-body" style="border-top:1px solid var(--border)">${pager}</div>` : ""}`;
   };
 
   App.saveBox = withBusy("#bxBtn", async (id) => {
@@ -394,42 +435,110 @@
   };
 
   // ---------- items editor ----------
+  // ข้อมูลยังเก็บแยกแถวละ 1 lot (แต่ละ lot มีวันหมดอายุของตัวเอง ใช้แจ้งเตือน 30/15/7 วัน)
+  // แต่หน้าจอรวมเป็น "ยา 1 รายการ + lot ย่อย" — ชื่อ/ความแรง/หน่วย/ควรมี กรอกครั้งเดียวที่แถวแรก
+  const drugKey = (it) => `${String(it.drugName || "").trim().toLowerCase()}|${String(it.strength || "").trim().toLowerCase()}`;
+  function groupDrugs(items) {
+    const m = new Map();
+    items.forEach((it) => { const k = drugKey(it); if (!m.has(k)) m.set(k, []); m.get(k).push(it); });
+    return [...m.values()];
+  }
   function itemsEditor(items) {
     return `<div class="table-wrap"><table class="t compact" id="itemsTable"><thead><tr><th>ชื่อยา</th><th>ความแรง</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th><th>ควรมี</th><th>หน่วย</th><th></th></tr></thead>
-      <tbody>${items.map(itemRow).join("")}</tbody></table></div>
-      <div class="row mt-12"><button class="btn sm" onclick="App.addItemRow()">${ic("plus")} เพิ่มรายการ</button><span class="xs faint">ยาเดียวกันหลาย lot ให้กด ${ic("copy")} เพื่อเพิ่ม lot</span></div>`;
+      ${groupDrugs(items).map(drugGroup).join("")}</table></div>
+      <div class="row mt-12 wrap"><button class="btn sm" onclick="App.addItemRow()">${ic("plus")} เพิ่มยา</button><span class="xs faint">ยาเดียวกันหลาย lot ให้กด ${ic("plus")} lot ที่แถวของยานั้น</span></div>`;
   }
-  function itemRow(it = {}) {
+  function lotCells(it) {
     const nd = nearDays();
     const dd = daysUntil(it.expiryDate);
     const color = !it.expiryDate ? "" : dd < 0 ? "color:var(--danger-text)" : dd <= nd ? "color:var(--warn-text)" : "";
-    return `<tr data-item><td><input class="input sm${drugKnown(it.drugName) ? "" : " warn-in"}" data-f="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(it.drugName || "")}"></td>
-      <td><input class="input sm" data-f="strength" value="${esc(it.strength || "")}" style="width:84px"></td>
-      <td><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" style="width:80px"></td>
+    return `<td><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" placeholder="Lot"></td>
       <td><input class="input sm" type="date" data-f="expiryDate" value="${esc(it.expiryDate || "")}" style="${color}"></td>
-      <td><input class="input sm" type="number" min="0" data-f="qty" value="${esc(it.qty ?? 0)}" style="width:62px"></td>
-      <td><input class="input sm" type="number" min="0" data-f="requiredQty" value="${esc(it.requiredQty ?? 0)}" style="width:62px"></td>
-      <td><input class="input sm" data-f="unit" list="unitList" value="${esc(it.unit || "")}" style="width:72px"><input type="hidden" data-f="form" value="${esc(it.form || "")}"></td>
-      <td class="nowrap"><button class="btn ghost sm icon" title="เพิ่ม lot" onclick="App.dupItem(this)">${ic("copy")}</button><button class="btn ghost sm icon" title="ลบ" onclick="this.closest('tr').remove()">${ic("x")}</button></td></tr>`;
+      <td><input class="input sm" type="number" min="0" data-f="qty" value="${esc(it.qty ?? 0)}" oninput="App.lotSum(this)"></td>`;
   }
+  function lotRow(it = {}) {
+    return `<tr data-lot class="lot-sub"><td colspan="2"><span class="lot-tag">${ic("corner-down-right")} lot เพิ่ม</span></td>${lotCells(it)}<td></td><td></td>
+      <td class="nowrap"><span class="btn sm icon" style="visibility:hidden"></span><button class="btn ghost sm icon" title="ลบ lot นี้" onclick="App.delLot(this)">${ic("x")}</button></td></tr>`;
+  }
+  function drugGroup(lots = [{}]) {
+    const h = lots[0] || {};
+    const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
+    return `<tbody data-drug>
+      <tr data-lot class="lot-head"><td><input class="input sm${drugKnown(h.drugName) ? "" : " warn-in"}" data-g="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(h.drugName || "")}"></td>
+        <td><input class="input sm" data-g="strength" value="${esc(h.strength || "")}"></td>
+        ${lotCells(h)}
+        <td><input class="input sm" type="number" min="0" data-g="requiredQty" value="${esc(req)}" title="จำนวนที่ควรมีรวมทุก lot" oninput="App.lotSum(this)"></td>
+        <td><input class="input sm" data-g="unit" list="unitList" value="${esc(h.unit || "")}"><input type="hidden" data-g="form" value="${esc(h.form || "")}"></td>
+        <td class="nowrap"><button class="btn ghost sm icon" title="เพิ่ม lot ของยานี้" onclick="App.dupItem(this)">${ic("plus")}</button><button class="btn ghost sm icon" title="ลบ" onclick="App.delLot(this)">${ic("x")}</button></td></tr>
+      ${lots.slice(1).map(lotRow).join("")}
+      ${sumRow(lots)}
+    </tbody>`;
+  }
+  function sumRow(lots) {
+    const tot = lots.reduce((a, x) => a + Number(x.qty || 0), 0);
+    const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
+    const short = req && tot < req;
+    return `<tr class="lot-sum" ${lots.length > 1 ? "" : "hidden"}><td colspan="4" class="xs faint" style="text-align:right">รวม <span data-n>${lots.length}</span> lot</td>
+      <td class="tabnum" data-tot style="font-weight:650;${short ? "color:var(--danger-text)" : ""}">${tot}</td><td colspan="3" class="xs ${short ? "" : "faint"}" data-msg style="${short ? "color:var(--danger-text)" : ""}">${short ? `ขาด ${req - tot}` : req ? "ครบ" : ""}</td></tr>`;
+  }
+  App.lotSum = (el) => {
+    const tb = el.closest("tbody[data-drug]"); if (!tb) return;
+    const lots = [...tb.querySelectorAll("tr[data-lot]")];
+    const tot = lots.reduce((a, tr) => a + Number(tr.querySelector('[data-f="qty"]').value || 0), 0);
+    const req = Number(tb.querySelector('[data-g="requiredQty"]').value || 0);
+    const sr = tb.querySelector("tr.lot-sum");
+    sr.hidden = lots.length < 2;
+    sr.querySelector("[data-n]").textContent = lots.length;
+    const short = req && tot < req;
+    const t = sr.querySelector("[data-tot]"); t.textContent = tot; t.style.color = short ? "var(--danger-text)" : "";
+    const m = sr.querySelector("[data-msg]"); m.textContent = short ? `ขาด ${req - tot}` : req ? "ครบ" : ""; m.style.color = short ? "var(--danger-text)" : "";
+    m.classList.toggle("faint", !short);
+  };
   function itemsReadonly(items) {
     const nd = nearDays();
-    return items.length ? `<div class="table-wrap"><table class="t compact responsive"><thead><tr><th>ชื่อยา</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th></tr></thead><tbody>${items.map((it) => `<tr><td data-l="ยา">${esc(it.drugName)} <span class="muted">${esc(it.strength || "")}</span></td><td data-l="Lot">${esc(it.lot || "–")}</td><td data-l="หมดอายุ">${expPill(it.expiryDate, nd)}</td><td data-l="จำนวน" class="tabnum">${esc(it.qty)} / ${esc(it.requiredQty || "–")} ${esc(it.unit || "")}</td></tr>`).join("")}</tbody></table></div>` : empty("ยังไม่มีรายการยา", "pill-off");
+    if (!items.length) return empty("ยังไม่มีรายการยา", "pill-off");
+    const rows = groupDrugs(items).map((lots) => {
+      const tot = lots.reduce((a, x) => a + Number(x.qty || 0), 0);
+      const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
+      const h = lots[0];
+      return lots.map((it, i) => `<tr class="${i ? "lot-sub" : ""}"><td data-l="ยา">${i ? `<span class="lot-tag">${ic("corner-down-right")} lot เพิ่ม</span>` : `${esc(h.drugName)} <span class="muted">${esc(h.strength || "")}</span>`}</td><td data-l="Lot">${esc(it.lot || "–")}</td><td data-l="หมดอายุ">${expPill(it.expiryDate, nd)}</td><td data-l="จำนวน" class="tabnum">${esc(it.qty)}${i ? "" : ` / ${esc(req || "–")} ${esc(h.unit || "")}`}${!i && lots.length > 1 ? ` <span class="xs faint">(รวม ${tot})</span>` : ""}</td></tr>`).join("");
+    }).join("");
+    return `<div class="table-wrap"><table class="t compact responsive"><thead><tr><th>ชื่อยา</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
-  App.addItemRow = () => $("#itemsTable tbody").insertAdjacentHTML("beforeend", itemRow({}));
+  App.addItemRow = () => {
+    $("#itemsTable").insertAdjacentHTML("beforeend", drugGroup([{}]));
+    const tbs = $$("#itemsTable tbody[data-drug]"); tbs[tbs.length - 1].querySelector('[data-g="drugName"]').focus();
+  };
   App.dupItem = (btn) => {
-    const tr = btn.closest("tr");
-    const g = (f) => tr.querySelector(`[data-f="${f}"]`).value;
-    tr.insertAdjacentHTML("afterend", itemRow({ drugName: g("drugName"), strength: g("strength"), unit: g("unit"), form: g("form"), requiredQty: 0, qty: 0 }));
+    const tb = btn.closest("tbody[data-drug]");
+    tb.querySelector("tr.lot-sum").insertAdjacentHTML("beforebegin", lotRow({ qty: 0 }));
+    const rows = tb.querySelectorAll("tr[data-lot]");
+    rows[rows.length - 1].querySelector('[data-f="lot"]').focus();
+    App.lotSum(btn);
+  };
+  App.delLot = (btn) => {
+    const tr = btn.closest("tr"), tb = tr.closest("tbody[data-drug]");
+    const lots = [...tb.querySelectorAll("tr[data-lot]")];
+    if (lots.length === 1) { tb.remove(); return; }              // lot เดียว = ลบยารายการนี้
+    if (tr.classList.contains("lot-head")) {                      // ลบ lot แรก: ยก lot ถัดไปขึ้นมาแทน
+      const nx = lots[1];
+      ["lot", "expiryDate", "qty"].forEach((f) => { const src = nx.querySelector(`[data-f="${f}"]`); const dst = tr.querySelector(`[data-f="${f}"]`); dst.value = src.value; dst.style.color = src.style.color; });
+      nx.remove();
+    } else tr.remove();
+    App.lotSum(tb.querySelector("input"));
   };
   function collectItems() {
-    return $$("#itemsTable [data-item]").map((tr) => {
-      const o = {};
-      tr.querySelectorAll("[data-f]").forEach((el) => (o[el.dataset.f] = el.value.trim()));
-      o.qty = Number(o.qty || 0);
-      o.requiredQty = Number(o.requiredQty || 0);
-      return o;
-    }).filter((o) => o.drugName);
+    const out = [];
+    $$("#itemsTable tbody[data-drug]").forEach((tb) => {
+      const g = (f) => (tb.querySelector(`[data-g="${f}"]`)?.value || "").trim();
+      const drugName = g("drugName"); if (!drugName) return;
+      const base = { drugName, strength: g("strength"), unit: g("unit"), form: g("form"), requiredQty: Number(g("requiredQty") || 0) };
+      tb.querySelectorAll("tr[data-lot]").forEach((tr) => {
+        const f = (k) => tr.querySelector(`[data-f="${k}"]`).value.trim();
+        out.push({ ...base, lot: f("lot"), expiryDate: f("expiryDate"), qty: Number(f("qty") || 0) });
+      });
+    });
+    return out;
   }
 
   // ---------- QR / print ----------

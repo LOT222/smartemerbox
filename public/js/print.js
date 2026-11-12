@@ -110,35 +110,89 @@
     return [...m.values()].map((g) => ({ ...g, near: g.exp && daysUntil(g.exp) <= nd }));
   }
 
+  // วัดความกว้างข้อความ (มม.) ด้วย canvas — ใช้ตัดบรรทัดชื่อยา/lot ให้ตรงกับที่พิมพ์จริง
+  let _mctx = null;
+  function textMm(t, fsMm, bold) {
+    if (!_mctx) { try { _mctx = document.createElement("canvas").getContext("2d"); } catch (_) { _mctx = null; } }
+    if (!_mctx) return String(t).length * fsMm * 0.55;
+    _mctx.font = `${bold ? 700 : 400} 100px "IBM Plex Sans Thai","Inter",system-ui,sans-serif`;
+    return (_mctx.measureText(String(t)).width / 100) * fsMm * 1.1;    // เผื่อ 10% (ฟอนต์ตอนพิมพ์อาจกว้างกว่าที่วัด)
+  }
+  // ตัดคำเป็นบรรทัดตามความกว้างคอลัมน์ (คำที่ยาวเกินบรรทัดจะถูกตัดกลางคำ)
+  function wrapWords(text, wMm, fsMm) {
+    const words = String(text || "").split(/\s+/).filter(Boolean);
+    const lines = []; let cur = "";
+    const push = (w) => {
+      if (textMm(w, fsMm) <= wMm) return w;
+      let part = "";
+      for (const ch of w) { if (textMm(part + ch, fsMm) > wMm && part) { lines.push(part); part = ch; } else part += ch; }
+      return part;
+    };
+    words.forEach((w) => {
+      const t = cur ? cur + " " + w : w;
+      if (textMm(t, fsMm) <= wMm) cur = t;
+      else { if (cur) lines.push(cur); cur = push(w); }
+    });
+    if (cur) lines.push(cur);
+    return lines.length ? lines : [""];
+  }
+  // จัด lot ลงบรรทัด: หลาย lot ต่อบรรทัดถ้าพอ ไม่ตัด lot กลางคำ
+  function packLots(lots, wMm, fsMm) {
+    if (!lots.length) return ["-"];
+    const lines = []; let cur = "";
+    lots.forEach((l) => {
+      const t = cur ? cur + ", " + l : l;
+      if (!cur || textMm(t, fsMm) <= wMm) cur = t; else { lines.push(cur + ","); cur = l; }
+    });
+    lines.push(cur);
+    return lines;
+  }
+
   function recordDoc(c, b, fields) {
     const cw = +c.cw, ch = +c.ch;
     const pad = Math.max(2, Math.min(cw, ch) * 0.045);
     const rowH = Math.min(7.5, Math.max(3.4, ch * 0.072)) * (+c.scale || 1);
     const fs = rowH * 0.56;                       // ตัวอักษรในตาราง (มม.)
+    const lineH = fs * 1.18;                      // ความสูงบรรทัดที่ 2 เป็นต้นไป
     const headH = rowH * 2.5, theadH = rowH, footH = rowH * 2.1;
-    const cap = Math.max(1, Math.floor((ch - 2 * pad - headH - theadH - 1) / rowH));
-    const capLast = Math.max(1, Math.floor((ch - 2 * pad - headH - theadH - footH - 1) / rowH));
-    const rows = groupItems(b.items);
+    const tblW = cw - 2 * pad, cellPad = fs * 0.45 * 2 + 0.4;
+    // สัดส่วนคอลัมน์: ยา 37% · จำนวน 9% · Lot 36% · Exp 18%
+    const COLS = [37, 9, 36, 18];
+    const nameW = tblW * COLS[0] / 100 - cellPad, lotW = tblW * COLS[2] / 100 - cellPad;
+    const lotFs = fs * 0.92;
+    const rows = groupItems(b.items).map((r) => {
+      const nl = wrapWords(r.name, nameW, fs);
+      const ll = packLots(r.lots, lotW, lotFs);
+      const n = Math.max(nl.length, ll.length);
+      return { ...r, nl, ll, h: rowH + (n - 1) * lineH };
+    });
+    const bodyCap = ch - 2 * pad - headH - theadH - 1;
+    const bodyCapLast = bodyCap - footH;
+    const sum = (a) => a.reduce((x, r) => x + r.h, 0);
+    // แบ่งแถบตามความสูงจริงของแต่ละแถว — แถวที่ไม่พอในแถบนี้จะยกไปแถบถัดไปทั้งแถว
     const pages = [];
     let i = 0;
     while (i < rows.length || !pages.length) {
-      const rest = rows.length - i;
-      if (rest <= capLast) { pages.push({ rows: rows.slice(i), last: true }); break; }
-      let take = Math.min(cap, rest);
-      if (rest - take === 0) take = Math.max(1, take - 1); // ให้แถบสุดท้ายมีรายการยาอย่างน้อย 1 แถว คู่กับส่วนลงชื่อ
-      pages.push({ rows: rows.slice(i, i + take), last: false });
+      const rest = rows.slice(i);
+      if (sum(rest) <= bodyCapLast + 0.01) { pages.push({ rows: rest, last: true }); break; }
+      let take = 0, h = 0;
+      while (take < rest.length && h + rest[take].h <= bodyCap + 0.01) { h += rest[take].h; take++; }
+      if (take === 0) take = 1;                                   // แถวเดียวสูงเกินแถบ: ใส่ไปก่อน (จะถูกตัดท้าย)
+      if (take === rest.length) take = Math.max(1, take - 1);     // ให้แถบสุดท้ายมีรายการยาอย่างน้อย 1 แถว คู่กับส่วนลงชื่อ
+      pages.push({ rows: rest.slice(0, take), last: false });
       i += take;
     }
     const hasNear = rows.some((r) => r.near);
+    const br = (a) => a.map(esc).join("<br>");
     const card = (p, idx) => {
-      const n = p.last ? capLast : cap;
-      const fill = Math.max(0, n - p.rows.length);
-      const tr = p.rows.map((r) => `<tr><td class="nm">${esc(r.name)}</td><td class="c">${r.qty}</td><td class="c lot">${esc(r.lots.join(", ") || "-")}</td><td class="c">${r.exp ? thDate(r.exp) + (r.near ? "*" : "") : "-"}</td></tr>`).join("")
+      const left = (p.last ? bodyCapLast : bodyCap) - sum(p.rows);
+      const fill = Math.max(0, Math.floor(left / rowH + 0.001));
+      const tr = p.rows.map((r) => `<tr style="height:${r.h.toFixed(2)}mm"><td class="nm">${br(r.nl)}</td><td class="c">${r.qty}</td><td class="c lot">${br(r.ll)}</td><td class="c">${r.exp ? thDate(r.exp) + (r.near ? "*" : "") : "-"}</td></tr>`).join("")
         + Array.from({ length: fill }, () => `<tr><td>&nbsp;</td><td></td><td></td><td></td></tr>`).join("");
       return `<section class="card">
         <header><div class="hrow"><img class="hl" src="${SEB.hospLogoAbs()}" alt=""><div><div class="code">${esc(fields.name)}</div><div class="loc">${esc(fields.location)}</div></div></div>
           <div class="meta"><div><b>วันที่: ${esc(fields.date)}</b></div><div>ผู้ตรวจ: ${esc(fields.inspector)}</div>${pages.length > 1 ? `<div class="pg">แผ่น ${idx + 1}/${pages.length}</div>` : ""}</div></header>
-        <table><colgroup><col style="width:46%"><col style="width:10%"><col style="width:25%"><col style="width:19%"></colgroup>
+        <table><colgroup>${COLS.map((w) => `<col style="width:${w}%">`).join("")}</colgroup>
           <thead><tr><th>ยา</th><th class="c">จำนวน</th><th class="c">Lot</th><th class="c">Exp</th></tr></thead><tbody>${tr}</tbody></table>
         ${p.last ? `<footer><div>${hasNear ? `* ยาใกล้หมดอายุ (&lt;${nearDays()} วัน)` : "&nbsp;"}</div><div class="sig"><span>เวลา: ${nowTime()}</span><span>ผู้ตรวจ: ____________________</span></div></footer>` : ""}
       </section>`;
@@ -149,17 +203,18 @@
       .wrap{display:flex;flex-direction:column;gap:${band ? 0 : c.gap}mm;align-items:flex-start}
       .card{width:${cw}mm;height:${ch}mm;border:0.35mm solid #222;padding:${pad.toFixed(1)}mm;display:flex;flex-direction:column;overflow:hidden;break-inside:avoid;page-break-inside:avoid;${band ? "page-break-after:always;break-after:page;border-color:transparent" : ""}}
       .card:last-child{page-break-after:auto;break-after:auto}
-      header{display:flex;justify-content:space-between;align-items:flex-start;height:${headH.toFixed(2)}mm;border-bottom:0.3mm solid #222;margin-bottom:${(rowH * 0.25).toFixed(2)}mm}
+      header{display:flex;justify-content:space-between;align-items:flex-start;height:${headH.toFixed(2)}mm;flex:none;border-bottom:0.3mm solid #222;margin-bottom:${(rowH * 0.25).toFixed(2)}mm}
       .hrow{display:flex;align-items:center;gap:${(rowH * 0.35).toFixed(2)}mm;min-width:0}.hrow .hl{height:${(headH * 0.78).toFixed(2)}mm;width:auto;flex:none}
       .code{font-size:${(rowH * 0.95).toFixed(2)}mm;font-weight:700;line-height:1.1}.loc{font-size:${(fs * 0.95).toFixed(2)}mm;color:#333}
       .meta{text-align:right;font-size:${(fs * 0.9).toFixed(2)}mm;line-height:1.3}.pg{color:#777}
-      table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fs.toFixed(2)}mm}
-      th,td{border:0.2mm solid #777;padding:0 ${(fs * 0.45).toFixed(2)}mm;height:${rowH.toFixed(2)}mm;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:${fs.toFixed(2)}mm;flex:none}
+      th,td{border:0.2mm solid #777;padding:0 ${(fs * 0.45).toFixed(2)}mm;height:${rowH.toFixed(2)}mm;line-height:${(lineH / fs).toFixed(3)};white-space:nowrap;overflow:hidden;vertical-align:middle}
       th{height:${theadH.toFixed(2)}mm;text-align:left;font-weight:700;background:#f1f1f3}
-      .c{text-align:center}.lot{font-size:.92em}
+      .c{text-align:center}.lot{font-size:${(lotFs).toFixed(2)}mm}
       footer{margin-top:auto;font-size:${(fs * 0.9).toFixed(2)}mm;color:#444;line-height:1.5}
       .sig{display:flex;justify-content:space-between;color:#111}`;
-    return { html: doc(css, `<div class="wrap">${pages.map(card).join("")}</div>`), pages: pages.length, cap, sheet: [sheetW, sheetH] };
+    const maxRows = Math.max(1, Math.floor(bodyCap / rowH));
+    return { html: doc(css, `<div class="wrap">${pages.map(card).join("")}</div>`), pages: pages.length, cap: maxRows, sheet: [sheetW, sheetH] };
   }
 
   // =================================================================
@@ -231,7 +286,7 @@
         html = r.html;
         [W, H] = r.sheet;
         m = c.out === "band" ? 0 : +c.margin;
-        $("#prInfo").textContent = `${c.cw}×${c.ch} มม. · ${r.pages} แถบ · ${r.cap} รายการ/แถบ`;
+        $("#prInfo").textContent = `${c.cw}×${c.ch} มม. · ${r.pages} แถบ · สูงสุด ${r.cap} รายการ/แถบ`;
       } else {
         const boxes = D().boxes.filter((b) => ST.ids.includes(b.id));
         html = labelSheet(c, boxes, ST.kind === "qr" ? qrInner(c) : apptInner(c));

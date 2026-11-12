@@ -826,3 +826,15 @@ html.dark .mt-ic { background: color-mix(in srgb, var(--mc) 22%, var(--surface))
 #itemsTable td:first-child .input.sm { min-width: 150px; }
 #itemsTable.t.compact td { padding: 6px 4px; }
 #itemsTable.t.compact th { padding: 8px 4px; }
+
+/* v2.13 — รายการยาแบบรวม lot + ประวัติการเปิดแบ่งหน้า */
+#itemsTable tbody[data-drug] + tbody[data-drug] tr:first-child td { border-top: 2px solid var(--border); }
+#itemsTable tr.lot-sub td { background: var(--surface-2, #faf9fc); }
+.lot-tag { color: var(--text-3, #8a8796); font-size: 12px; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding-left: 10px; }
+#itemsTable tr.lot-sum td { padding-top: 2px; padding-bottom: 6px; border-top: 0; background: var(--surface-2, #faf9fc); }
+#itemsTable [data-g="strength"] { width: 84px; } #itemsTable [data-f="lot"] { width: 88px; }
+#itemsTable [data-g="unit"] { width: 64px !important; }
+#itemsTable [data-f="qty"], #itemsTable [data-g="requiredQty"] { width: 56px !important; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap; }
+.pager .btn.sm:not(.icon) { min-width: 32px; padding: 0 8px; }
+#boxHist .card-head { flex-wrap: wrap; row-gap: 8px; }

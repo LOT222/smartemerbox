@@ -186,7 +186,7 @@
     inp.classList.toggle("warn-in", !!v && !hits.length);
     inp.title = v && !hits.length ? "ไม่อยู่ในรายการยากลาง ตรวจการสะกด หรือให้ผู้ดูแลเพิ่มในรายการ" : "";
     if (hits.length === 1 && tr) {
-      const st = tr.querySelector('[data-f="strength"]'), un = tr.querySelector('[data-f="unit"]');
+      const st = tr.querySelector('[data-f="strength"],[data-g="strength"]'), un = tr.querySelector('[data-f="unit"],[data-g="unit"]');
       if (st && !st.value && hits[0].strength) st.value = hits[0].strength;
       if (un && !un.value && hits[0].unit) un.value = hits[0].unit;
     }
