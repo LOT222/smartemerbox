@@ -1,0 +1,54 @@
+name: Deploy backend (Edge Function)
+# push ไฟล์ใน supabase/functions/** ขึ้น main → deploy Edge Function "api" ให้อัตโนมัติ
+# ต้องตั้งค่าใน GitHub → Settings → Secrets and variables → Actions:
+#   secret   SUPABASE_ACCESS_TOKEN   (Supabase Dashboard → Account → Access Tokens → Generate new token)
+#   variable SUPABASE_PROJECT_REF    (เช่น xsjenlppfpuykxwjbbfp)
+# ถ้ายังไม่ตั้ง secret ระบบจะข้าม (ไม่ล้ม) — deploy เองด้วยคำสั่งในคู่มือได้ตามเดิม
+# ฐานข้อมูล (migration) ไม่ deploy อัตโนมัติ เพื่อความปลอดภัยของข้อมูลวิจัย → รันเองใน SQL Editor
+on:
+  push:
+    branches: [main, master, seb-v2]
+    paths:
+      - "supabase/functions/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SITE: ${{ vars.SEB_SUPABASE_URL }}
+      ANON: ${{ secrets.SEB_SUPABASE_ANON_KEY }}
+    steps:
+      - name: Check settings
+        id: chk
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$PROJECT_REF" ]; then
+            echo "::notice::ยังไม่ได้ตั้ง SUPABASE_ACCESS_TOKEN / SUPABASE_PROJECT_REF → ข้ามการ deploy อัตโนมัติ"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.chk.outputs.skip != '1'
+      - uses: supabase/setup-cli@v1
+        if: steps.chk.outputs.skip != '1'
+        with:
+          version: latest
+      - name: Deploy function "api"
+        if: steps.chk.outputs.skip != '1'
+        run: supabase functions deploy api --project-ref "$PROJECT_REF" --no-verify-jwt
+      - name: Health check
+        if: steps.chk.outputs.skip != '1'
+        run: |
+          set -e
+          sleep 5
+          URL="${SITE:-https://$PROJECT_REF.supabase.co}"
+          OUT=$(curl -fsS -X POST "$URL/functions/v1/api" -H "content-type: application/json" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -d '{"action":"apiHealth","args":[]}')
+          echo "$OUT"
+          echo "$OUT" | grep -q '"ok":true' || { echo "::error::backend ไม่ตอบ ok"; exit 1; }
+          echo "$OUT" | grep -q '"schemaOk":false' && echo "::warning::ฐานข้อมูลยังไม่ได้รัน migration ล่าสุด (ดู schema/schemaRequired ด้านบน)" || true

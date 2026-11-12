@@ -1,0 +1,10 @@
+# Netlify (เว็บซ้อม / ทางเลือกนอกเหนือ GitHub Pages)
+# ตั้ง Environment variables ใน Netlify: SEB_SUPABASE_URL, SEB_SUPABASE_ANON_KEY (publishable key), SEB_VAPID_PUBLIC_KEY (ไม่บังคับ)
+[build]
+  publish = "public"
+  command = "printf 'window.SEB_SUPABASE_URL = \"%s\";\\nwindow.SEB_SUPABASE_ANON_KEY = \"%s\";\\nwindow.SEB_VAPID_PUBLIC_KEY = \"%s\";\\n' \"$SEB_SUPABASE_URL\" \"$SEB_SUPABASE_ANON_KEY\" \"$SEB_VAPID_PUBLIC_KEY\" > public/config.js && cat public/config.js"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

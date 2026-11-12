@@ -10,6 +10,8 @@ jobs:
     steps:
       - name: Ping Supabase Project
         run: |
-          curl -i -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/" \
-          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
+          curl -fsS -X POST "${{ vars.SEB_SUPABASE_URL }}/functions/v1/api" \
+          -H "content-type: application/json" \
+          -H "apikey: ${{ secrets.SEB_SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SEB_SUPABASE_ANON_KEY }}" \
+          -d '{"action":"apiHealth","args":[]}'

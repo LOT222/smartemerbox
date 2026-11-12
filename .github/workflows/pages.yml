@@ -28,6 +28,7 @@ jobs:
           cat > public/config.js <<'EOF'
           window.SEB_SUPABASE_URL = "${{ vars.SEB_SUPABASE_URL }}";
           window.SEB_SUPABASE_ANON_KEY = "${{ secrets.SEB_SUPABASE_ANON_KEY }}";
+          window.SEB_VAPID_PUBLIC_KEY = "${{ vars.SEB_VAPID_PUBLIC_KEY }}";
           EOF
       - uses: actions/upload-pages-artifact@v3
         with:

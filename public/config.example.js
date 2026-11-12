@@ -1,3 +1,3 @@
 window.SEB_SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co";
 window.SEB_SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
-
+window.SEB_VAPID_PUBLIC_KEY = "";

@@ -1,0 +1,4 @@
+# ให้ Edge Function "api" รับคำขอจากหน้าเว็บ (publishable key) และ LINE webhook ได้
+# การยืนยันตัวตนผู้ใช้ทำภายในฟังก์ชันด้วย session token ของระบบ
+[functions.api]
+verify_jwt = false

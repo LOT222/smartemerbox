@@ -1,0 +1,43 @@
+name: Nightly Backup (encrypted)
+# สำรองข้อมูลทุกตารางทุกคืน 02:30 น. (เวลาไทย) → เข้ารหัส AES-256 → เก็บเป็น artifact 30 วัน
+# ต้องตั้งค่า: vars.SEB_SUPABASE_URL, secrets.SEB_SUPABASE_ANON_KEY, secrets.SEB_BACKUP_KEY, secrets.SEB_BACKUP_PASSPHRASE
+# ⚠ repo สาธารณะ: artifact ดาวน์โหลดได้โดยผู้ที่เข้าถึง repo จึงต้องเข้ารหัสเสมอ (ไฟล์มี HN และ hash รหัสผ่าน)
+on:
+  schedule:
+    - cron: "30 19 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Export all tables
+        env:
+          URL: ${{ vars.SEB_SUPABASE_URL }}
+          ANON: ${{ secrets.SEB_SUPABASE_ANON_KEY }}
+          KEY: ${{ secrets.SEB_BACKUP_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$KEY" || { echo "ยังไม่ได้ตั้ง SEB_BACKUP_KEY"; exit 1; }
+          call() { curl -fsS --max-time 120 -X POST "$URL/functions/v1/api" -H "content-type: application/json" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -d "$1"; }
+          mkdir -p out
+          call "{\"action\":\"apiBackup\",\"args\":[\"$KEY\",\"__tables\"]}" > out/_tables.json
+          for t in $(jq -r '.data.tables[]' out/_tables.json); do
+            call "{\"action\":\"apiBackup\",\"args\":[\"$KEY\",\"$t\"]}" | jq '.data.rows' > "out/$t.json"
+            echo "$t: $(jq 'length' out/$t.json) rows"
+          done
+          echo "STAMP=$(TZ=Asia/Bangkok date +%Y%m%d-%H%M)" >> "$GITHUB_ENV"
+      - name: Encrypt
+        env:
+          PASS: ${{ secrets.SEB_BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          test ${#PASS} -ge 16 || { echo "SEB_BACKUP_PASSPHRASE ต้องยาวอย่างน้อย 16 ตัวอักษร"; exit 1; }
+          tar -czf backup.tar.gz -C out .
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in backup.tar.gz -out "seb-backup-$STAMP.tar.gz.enc" -pass env:PASS
+          rm -rf out backup.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seb-backup-${{ env.STAMP }}
+          path: seb-backup-*.tar.gz.enc
+          retention-days: 30
