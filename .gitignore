@@ -1,0 +1,5 @@
+node_modules/
+tools/fix-columns.sql
+SEB-secrets*.txt
+*.env
+.env*
