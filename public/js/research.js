@@ -307,8 +307,8 @@
   App.paperEventForm = () => {
     drawer("คีย์เหตุการณ์จากแบบฟอร์มกระดาษ", `<div class="form-grid">
       ${field("หน่วยงาน", `<select class="input" id="peLoc">${App._locsOpt}</select>`)}${field("รหัสกล่อง", `<input class="input" id="peBox">`)}
-      ${field("เวลาเปิดใช้จริง", `<input class="input" type="datetime-local" id="peOpen">`)}${field("เวลาหน่วยงานแจ้งเภสัชกร", `<input class="input" type="datetime-local" id="peNotify">`)}
-      ${field("เวลาเภสัชกรรับทราบ", `<input class="input" type="datetime-local" id="peAck">`)}${field("เวลากล่องกลับมาพร้อมใช้", `<input class="input" type="datetime-local" id="peReady">`)}
+      ${field("เวลาเปิดใช้จริง", X.dtSel('id="peOpen"', ""))}${field("เวลาหน่วยงานแจ้งเภสัชกร", X.dtSel('id="peNotify"', ""))}
+      ${field("เวลาเภสัชกรรับทราบ", X.dtSel('id="peAck"', ""))}${field("เวลากล่องกลับมาพร้อมใช้", X.dtSel('id="peReady"', ""))}
       ${field("เหตุผล", `<select class="input" id="peReason">${opt([["", "ไม่ระบุ"], ...optList("OPT_OPEN_REASONS").map((r) => [r, r])], "")}</select>`)}<div></div>
       ${field("จำนวนฟิลด์ที่จำเป็น", `<input class="input" type="number" id="peReq" value="6">`, "ใช้นิยามเดียวกับหลังใช้ระบบ")}${field("จำนวนฟิลด์ที่บันทึกครบ", `<input class="input" type="number" id="peFill">`)}
       ${field("หมายเหตุ", `<input class="input" id="peNote">`, "", "full")}</div>`,
@@ -352,7 +352,7 @@
   function tabObs() {
     const R = S.research;
     $("#resBody").innerHTML = `<div class="split"><div class="card card-pad"><h3>บันทึกการสังเกตภาคสนาม</h3><div class="xs faint mt-4">สำหรับผู้วิจัยเท่านั้น · ใช้รหัสแทนชื่อผู้ถูกสังเกต · ไม่รบกวนการให้บริการผู้ป่วย</div>
-      <div class="form-grid mt-16">${field("วันเวลาที่สังเกต", `<input class="input" type="datetime-local" id="obT" value="${localInput()}">`)}${field("สถานที่", `<select class="input" id="obP">${opt([["", "เลือก"], ...R.locations.map((l) => [l.name, l.name])], "")}</select>`)}${field("ผู้ถูกสังเกต (รหัส)", `<input class="input mono" id="obC" placeholder="เช่น N03">`)}</div>
+      <div class="form-grid mt-16">${field("วันเวลาที่สังเกต", X.dtSel('id="obT"', localInput()))}${field("สถานที่", `<select class="input" id="obP">${opt([["", "เลือก"], ...R.locations.map((l) => [l.name, l.name])], "")}</select>`)}${field("ผู้ถูกสังเกต (รหัส)", `<input class="input mono" id="obC" placeholder="เช่น N03">`)}</div>
       ${OBS.map((o, i) => `<div class="q"><div class="q-title">${o}</div><div class="row wrap mt-8"><div class="seg" data-ob="${i}">${["ดี", "ปานกลาง", "ควรปรับปรุง"].map((l) => `<button type="button" onclick="SEB.$$('[data-ob=\\'${i}\\'] button').forEach(b=>b.classList.toggle('on',b===this))">${l}</button>`).join("")}</div><input class="input sm grow" data-obd="${i}" placeholder="รายละเอียดที่พบ"></div></div>`).join("")}
       ${field("บันทึกเพิ่มเติม", `<textarea class="input" id="obN"></textarea>`)}
       <div class="row mt-16" style="justify-content:flex-end"><button class="btn primary" onclick="App.saveObs()">บันทึก</button></div></div>

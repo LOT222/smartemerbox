@@ -88,7 +88,7 @@
   function notifText(e) {
     if (e.notificationStatus === "sent") return `แจ้ง LINE ${fmtT(e.notificationSentAt)}${e.pushSent ? ` · Push ${e.pushSent} เครื่อง` : ""}`;
     if (e.notificationStatus === "failed") return `LINE ส่งไม่สำเร็จ${e.pushSent ? ` · Push ${e.pushSent} เครื่อง` : ""}`;
-    if (e.notificationStatus === "legacy_unknown") return "ระบบรุ่นแรก";
+    if (e.notificationStatus === "legacy_unknown") return "ไม่มีข้อมูล · เคสจากระบบเดิม (ก่อนย้ายมา v2 ไม่ได้เก็บเวลาส่ง)";
     return e.pushSent ? `Push ${e.pushSent} เครื่อง` : "ยังไม่ได้ตั้งค่าแจ้งเตือน";
   }
 
@@ -270,7 +270,7 @@
     drawer("บันทึกการเปิดกล่อง", `
       <div class="form-grid">
         ${field("กล่องยา", `<select class="input" id="rcBox">${opt([["", "เลือกกล่อง"], ...boxes.map((b) => [b.id, `${b.boxCode} · ${b.location}`])], boxId)}</select>`, "", "full")}
-        ${field("เวลาเปิดใช้จริง", `<input class="input" type="datetime-local" id="rcTime" value="${localInput()}">`, "บันทึกย้อนหลังได้")}
+        ${field("เวลาเปิดใช้จริง", X.dtSel('id="rcTime"', localInput(), { max: true }), "บันทึกย้อนหลังได้")}
         ${field("HN ผู้ป่วย", `<input class="input mono" id="rcHn" inputmode="numeric" maxlength="9" placeholder="9 หลัก">`)}
         ${field("ผู้เปิดใช้", `<input class="input" id="rcOpener" placeholder="ชื่อ-ตำแหน่ง">`)}
         ${field("เหตุผล", `<select class="input" id="rcReason">${opt(optList("OPT_OPEN_REASONS").map((r) => [r, r]), optList("OPT_OPEN_REASONS")[0])}</select>`)}

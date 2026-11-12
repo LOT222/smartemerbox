@@ -178,7 +178,7 @@
 
   App.pubToggleTime = () => {
     P.editTime = !P.editTime;
-    $("#timeBox").innerHTML = P.editTime ? `<input class="input" type="datetime-local" id="pubTime" value="${localInput()}" max="${localInput()}"><div class="xs faint mt-8">ระบบเก็บทั้งเวลาเปิดจริงและเวลาที่บันทึก แยกกัน</div>` : `<div style="font-size:20px;font-weight:650" class="tabnum">ตอนนี้ · ${fmtT(new Date().toISOString())} น.</div>`;
+    $("#timeBox").innerHTML = P.editTime ? `${X.dtSel('id="pubTime"', localInput(), { max: true })}<div class="xs faint mt-8">ระบบเก็บทั้งเวลาเปิดจริงและเวลาที่บันทึก แยกกัน</div>` : `<div style="font-size:20px;font-weight:650" class="tabnum">ตอนนี้ · ${fmtT(new Date().toISOString())} น.</div>`;
   };
   App.pubReason = (btn, i) => { P.reason = P.reasons[i]; $$(".reason-chips .chip").forEach((c) => c.classList.toggle("on", c === btn)); };
   App.pubOpener = (i) => { $("#pubOpener").value = P.names[i]; App.pubOpenerSync(); };
