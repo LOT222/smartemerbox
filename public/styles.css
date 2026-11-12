@@ -1034,3 +1034,15 @@ html.dark .iss-item { background: rgba(255,255,255,.06); }
 .dp-foot .btn { height: 46px; justify-content: center; font-size: 15px; }
 .dp-foot .btn:first-child { color: #3b5bdb; border-color: #3b5bdb; }
 .dp-note { text-align: center; font-size: 12px; color: var(--text-3, #8a8796); margin-top: 8px; }
+
+/* v2.13.5 — ตารางรายการยา (คอม): ทุกแถวสูงเท่ากัน */
+#itemsTable td { vertical-align: middle; height: 52px; }
+#itemsTable .dpick .dsel-th { display: none; }            /* พ.ศ. ดูได้จาก tooltip / แผ่นปฏิทิน */
+#itemsTable input[type=number] { -moz-appearance: textfield; appearance: textfield; text-align: center; padding: 0 4px; }
+#itemsTable input[type=number]::-webkit-inner-spin-button, #itemsTable input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+#itemsTable tr.lot-sum td { height: 38px; }
+.sum-l { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.sum-l .iss-slot { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+.sum-l .iss-badge { margin: 0; }
+#itemsTable .iss-badge { max-width: none; white-space: nowrap; }
+.sheet-tbl .sum-l { justify-content: flex-start; flex-wrap: wrap; }

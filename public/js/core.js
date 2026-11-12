@@ -367,7 +367,7 @@
     const v = /^\d{4}-\d{2}-\d{2}/.test(String(iso || "")) ? String(iso).slice(0, 10) : "";
     const dd = daysUntil(v), st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
     return `<span class="dsel dpick" data-st="${st}"><input type="hidden" ${attrs} value="${v}">
-      <button type="button" class="input sm dpick-btn" data-onch="${esc(onch || "")}" onclick="SEB.datePick(this)"><span class="dpick-v">${v ? fmtCE(v) : `<span class="faint">วว/ดด/ปปปป</span>`}</span>${ic("calendar")}</button>
+      <button type="button" class="input sm dpick-btn" data-onch="${esc(onch || "")}" title="${v ? "พ.ศ. " + fmtDLong(v) : ""}" onclick="SEB.datePick(this)"><span class="dpick-v">${v ? fmtCE(v) : `<span class="faint">วว/ดด/ปปปป</span>`}</span>${ic("calendar")}</button>
       <small class="dsel-th">${v ? "พ.ศ. " + fmtDLong(v) : ""}</small></span>`;
   }
   const fmtCE = (v) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || "")); return m ? `${m[3]}/${m[2]}/${m[1]}` : ""; };
@@ -429,6 +429,7 @@
     hid.value = v;
     w.querySelector(".dpick-v").innerHTML = v ? fmtCE(v) : `<span class="faint">วว/ดด/ปปปป</span>`;
     w.querySelector(".dsel-th").textContent = v ? "พ.ศ. " + fmtDLong(v) : "";
+    btn.title = v ? "พ.ศ. " + fmtDLong(v) : "";
     const dd = daysUntil(v);
     w.dataset.st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
     dpClose();

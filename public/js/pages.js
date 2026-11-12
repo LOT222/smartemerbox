@@ -486,6 +486,8 @@
       tb.dataset.issue = iss.lv;
       const slot = tb.querySelector(".iss-slot");
       if (slot) slot.innerHTML = issBadges(iss);
+      const sr = tb.querySelector("tr.lot-sum");
+      if (sr) sr.hidden = tb.querySelectorAll("tr[data-lot]").length < 2 && !iss.lv;
       tb.querySelectorAll("tr[data-lot]").forEach((tr) => {
         const d = daysUntil(tr.querySelector('[data-f="expiryDate"]').value);
         tr.dataset.lotst = d < 0 ? "exp" : d <= nearDays() ? "near" : "";
@@ -535,7 +537,7 @@
     const h = lots[0] || {};
     const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
     return `<tbody data-drug>
-      <tr data-lot class="lot-head"><td data-a="name" data-l="ชื่อยา"><input class="input sm${drugKnown(h.drugName) ? "" : " warn-in"}" data-g="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(h.drugName || "")}"><div class="iss-slot"></div></td>
+      <tr data-lot class="lot-head"><td data-a="name" data-l="ชื่อยา"><input class="input sm${drugKnown(h.drugName) ? "" : " warn-in"}" data-g="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(h.drugName || "")}"></td>
         <td data-a="str" data-l="ความแรง"><input class="input sm" data-g="strength" value="${esc(h.strength || "")}"></td>
         ${lotCells(h)}
         <td data-a="req" data-l="ควรมี (รวม)"><input class="input sm" type="number" min="0" data-g="requiredQty" value="${esc(req)}" title="จำนวนที่ควรมีรวมทุก lot" oninput="App.lotSum(this)"></td>
@@ -549,7 +551,7 @@
     const tot = lots.reduce((a, x) => a + Number(x.qty || 0), 0);
     const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
     const short = req && tot < req, over = req && tot > req;
-    return `<tr class="lot-sum" ${lots.length > 1 ? "" : "hidden"}><td colspan="4" class="xs faint" data-a="sl" style="text-align:right">รวม <span data-n>${lots.length}</span> lot</td>
+    return `<tr class="lot-sum" ${lots.length > 1 ? "" : "hidden"}><td colspan="4" data-a="sl"><div class="sum-l"><span class="iss-slot"></span><span class="xs faint">รวม <span data-n>${lots.length}</span> lot</span></div></td>
       <td class="tabnum" data-tot data-a="st" style="font-weight:650;${short ? "color:var(--danger-text)" : ""}">${tot}</td><td colspan="3" class="xs ${short || over ? "" : "faint"}" data-msg data-a="sm" style="${short ? "color:var(--danger-text);font-weight:650" : over ? "color:#6d28d9;font-weight:650" : ""}">${short ? `ขาด ${req - tot}` : over ? `เกิน ${tot - req}` : req ? "ครบ" : ""}</td></tr>`;
   }
   App.lotSum = (el) => {
@@ -558,7 +560,6 @@
     const tot = lots.reduce((a, tr) => a + Number(tr.querySelector('[data-f="qty"]').value || 0), 0);
     const req = Number(tb.querySelector('[data-g="requiredQty"]').value || 0);
     const sr = tb.querySelector("tr.lot-sum");
-    sr.hidden = lots.length < 2;
     sr.querySelector("[data-n]").textContent = lots.length;
     const short = req && tot < req, over = req && tot > req;
     const col = short ? "var(--danger-text)" : over ? "#6d28d9" : "";
