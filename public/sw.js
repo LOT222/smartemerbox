@@ -1,5 +1,5 @@
 /* SEB v2 service worker — app shell cache + Web Push */
-const VERSION = "seb-v2.12.0-12";
+const VERSION = "seb-v2.12.0-13";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./config.js", "./manifest.webmanifest",
   "./vendor/qrcode.js", "./vendor/fonts.css", "./vendor/icons.css", "./js/consent-text.js", "./js/core.js", "./js/consent.js", "./js/app.js", "./js/pages.js", "./js/print.js", "./js/stats.js", "./js/research.js", "./js/public.js",
@@ -44,7 +44,7 @@ self.addEventListener("push", (e) => {
     tag: p.tag || "seb",
     renotify: true,
     requireInteraction: !!p.urgent,
-    icon: "./icons/icon-192.png", "./icons/hospital-logo-96.png", "./icons/seb-logo-256.png", "./icons/hospital-logo-256.png",
+    icon: "./icons/icon-192.png",
     badge: "./icons/badge-72.png",
     vibrate: p.urgent ? [300, 120, 300, 120, 300] : [120],
     data: { url: p.url || "./" },
