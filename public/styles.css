@@ -921,3 +921,53 @@ body.sheet-open { overflow: hidden; }
 #itemsTable .dsel { min-width: 186px; } #itemsTable td[data-a="exp"] { min-width: 186px; }
 #itemsTable th, #itemsTable td { padding-left: 4px; padding-right: 4px; }
 #itemsTable td:first-child .input { min-width: 112px !important; } #itemsTable th:first-child { min-width: 112px !important; }
+
+/* v2.13.2 — เน้นยาที่มีประเด็น (หมดอายุ / ใกล้หมดอายุ / ขาด) */
+.iss-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 650; line-height: 1; padding: 4px 8px; border-radius: 999px; white-space: nowrap; margin: 4px 4px 0 0; }
+.iss-badge .ti { width: 13px; height: 13px; }
+.iss-exp { background: #dc2626; color: #fff; }
+.iss-near { background: #f59e0b; color: #fff; }
+.iss-short { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+.iss-slot:empty { display: none; }
+.iss-slot { margin-top: 2px; }
+
+/* แถวในตาราง (คอมพิวเตอร์) */
+#itemsTable tbody[data-issue="exp"] td { background: #fef2f2 !important; }
+#itemsTable tbody[data-issue="near"] td { background: #fffbeb !important; }
+#itemsTable tbody[data-issue="short"] td { background: #fff7f7 !important; }
+#itemsTable tbody[data-issue="exp"] tr td:first-child { box-shadow: inset 5px 0 0 #dc2626; }
+#itemsTable tbody[data-issue="near"] tr td:first-child { box-shadow: inset 5px 0 0 #f59e0b; }
+#itemsTable tbody[data-issue="short"] tr td:first-child { box-shadow: inset 5px 0 0 #f87171; }
+tr[data-lotst="exp"] [data-f="lot"], tr[data-lotst="exp"] .dsel select { border-color: #dc2626 !important; color: #b91c1c !important; font-weight: 650; background: #fff; }
+tr[data-lotst="near"] [data-f="lot"], tr[data-lotst="near"] .dsel select { border-color: #f59e0b !important; color: #92400e !important; font-weight: 650; background: #fff; }
+.dsel[data-st="exp"] .dsel-th { color: #b91c1c; font-weight: 650; } .dsel[data-st="near"] .dsel-th { color: #b45309; font-weight: 650; }
+tbody.iss-flash td { animation: issFlash 1.4s ease; }
+@keyframes issFlash { 0%, 60% { background: #fde68a !important; } }
+
+/* กล่องสรุป "ต้องจัดการ" */
+#issBox { margin-bottom: 12px; }
+.iss-box { border-radius: 12px; padding: 10px 12px; border: 1.5px solid; }
+.iss-box.lv-exp { background: #fef2f2; border-color: #fca5a5; }
+.iss-box.lv-near { background: #fffbeb; border-color: #fcd34d; }
+.iss-head { display: flex; align-items: center; gap: 6px; font-size: 14.5px; margin-bottom: 4px; }
+.lv-exp .iss-head { color: #b91c1c; } .lv-near .iss-head { color: #92400e; }
+.iss-item { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; width: 100%; text-align: left; font: inherit; font-size: 13.5px; font-weight: 550; color: var(--text); background: rgba(255,255,255,.75); border: 0; border-radius: 8px; padding: 6px 8px 8px; margin-top: 4px; cursor: pointer; }
+.iss-item:hover { background: #fff; }
+.iss-item .iss-badge { margin: 2px 0 0; }
+.iss-ok { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #11663f; background: #ecfdf3; border: 1px solid #bbf7d0; border-radius: 10px; padding: 8px 12px; }
+
+/* มือถือ: การ์ดสรุป */
+.im-row[data-issue="exp"] { border: 1.5px solid #fca5a5; border-left: 6px solid #dc2626; background: #fef2f2; }
+.im-row[data-issue="near"] { border: 1.5px solid #fcd34d; border-left: 6px solid #f59e0b; background: #fffbeb; }
+.im-row[data-issue="short"] { border-left: 6px solid #f87171; }
+.im-iss { margin-top: 2px; }
+
+/* มุมมองอ่านอย่างเดียว */
+table.t tr[data-issue="exp"] td { background: #fef2f2; } table.t tr[data-issue="near"] td { background: #fffbeb; }
+table.t tr[data-issue="exp"] td:first-child { box-shadow: inset 5px 0 0 #dc2626; } table.t tr[data-issue="near"] td:first-child { box-shadow: inset 5px 0 0 #f59e0b; }
+
+/* โหมดมืด */
+html.dark #itemsTable tbody[data-issue="exp"] td, html.dark table.t tr[data-issue="exp"] td, html.dark .im-row[data-issue="exp"], html.dark .iss-box.lv-exp { background: rgba(220, 38, 38, .16) !important; }
+html.dark #itemsTable tbody[data-issue="near"] td, html.dark table.t tr[data-issue="near"] td, html.dark .im-row[data-issue="near"], html.dark .iss-box.lv-near { background: rgba(245, 158, 11, .15) !important; }
+html.dark .iss-item { background: rgba(255,255,255,.06); }
+#itemsTable .iss-badge { white-space: normal; max-width: 112px; line-height: 1.2; }

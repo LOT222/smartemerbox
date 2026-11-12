@@ -445,8 +445,62 @@
     items.forEach((it) => { const k = drugKey(it); if (!m.has(k)) m.set(k, []); m.get(k).push(it); });
     return [...m.values()];
   }
+  // ประเด็นของยา 1 รายการ (รวมทุก lot): หมดอายุ > ใกล้หมดอายุ > จำนวนไม่ครบ
+  function drugIssue(lots, req) {
+    const nd = nearDays();
+    const tot = lots.reduce((a, x) => a + Number(x.qty || 0), 0);
+    const ds = lots.filter((x) => x.exp).map((x) => daysUntil(x.exp));
+    const minD = ds.length ? Math.min(...ds) : NaN;
+    const out = [];
+    if (minD < 0) out.push({ k: "exp", t: `หมดอายุแล้ว ${-minD} วัน` });
+    else if (minD <= nd) out.push({ k: "near", t: minD === 0 ? "หมดอายุวันนี้" : `ใกล้หมดอายุ · อีก ${minD} วัน` });
+    if (req && tot < req) out.push({ k: "short", t: `ขาด ${req - tot}` });
+    const lv = out.some((x) => x.k === "exp") ? "exp" : out.some((x) => x.k === "near") ? "near" : out.length ? "short" : "";
+    return { lv, list: out, tot, minD };
+  }
+  const ISS_ICON = { exp: "alert-circle", near: "alert-triangle", short: "alert-triangle" };
+  const issBadges = (iss) => iss.list.map((x) => `<span class="iss-badge iss-${x.k}">${ic(ISS_ICON[x.k])} ${x.t}</span>`).join("");
+  const domLots = (tb) => [...tb.querySelectorAll("tr[data-lot]")].map((tr) => ({ lot: tr.querySelector('[data-f="lot"]').value.trim(), exp: tr.querySelector('[data-f="expiryDate"]').value, qty: Number(tr.querySelector('[data-f="qty"]').value || 0) }));
+  // อัปเดตสี/ป้ายของแถวยาในตาราง + กล่องสรุปด้านบน (เรียกเมื่อโหลด และทุกครั้งที่แก้จำนวน/วันที่)
+  App.itemFlags = () => {
+    const tbs = $$("tbody[data-drug]");
+    const issues = [];
+    tbs.forEach((tb) => {
+      const g = (f) => (tb.querySelector(`[data-g="${f}"]`)?.value || "").trim();
+      const iss = drugIssue(domLots(tb), Number(g("requiredQty") || 0));
+      tb.dataset.issue = iss.lv;
+      const slot = tb.querySelector(".iss-slot");
+      if (slot) slot.innerHTML = issBadges(iss);
+      tb.querySelectorAll("tr[data-lot]").forEach((tr) => {
+        const d = daysUntil(tr.querySelector('[data-f="expiryDate"]').value);
+        tr.dataset.lotst = d < 0 ? "exp" : d <= nearDays() ? "near" : "";
+      });
+      if (iss.lv && g("drugName")) issues.push({ name: `${g("drugName")} ${g("strength")}`.trim(), iss, tb });
+    });
+    renderIssueBox(issues);
+  };
+  function renderIssueBox(issues) {
+    const el = $("#issBox"); if (!el) return;
+    if (!issues.length) { el.innerHTML = `<div class="iss-ok">${ic("circle-check")} ยาทุกรายการครบและยังไม่ใกล้หมดอายุ</div>`; return; }
+    const rank = { exp: 0, near: 1, short: 2 };
+    issues.sort((a, b) => rank[a.iss.lv] - rank[b.iss.lv] || (a.iss.minD || 0) - (b.iss.minD || 0));
+    const nExp = issues.filter((x) => x.iss.lv === "exp").length;
+    el.innerHTML = `<div class="iss-box ${nExp ? "lv-exp" : "lv-near"}">
+      <div class="iss-head">${ic(nExp ? "alert-circle" : "alert-triangle")} <b>ต้องจัดการ ${issues.length} รายการ</b></div>
+      ${issues.map((x, i) => `<button type="button" class="iss-item" onclick="App.goIssue(${i})"><span class="grow">${esc(x.name)}</span>${issBadges(x.iss)}</button>`).join("")}</div>`;
+    App._issues = issues;
+  }
+  App.goIssue = (i) => {
+    const x = App._issues?.[i]; if (!x) return;
+    const tbs = $$("#itemsTable tbody[data-drug]");
+    const idx = tbs.indexOf(x.tb);
+    if (window.matchMedia("(max-width: 760px)").matches && idx >= 0) return App.editDrug(idx);
+    x.tb.scrollIntoView({ behavior: "smooth", block: "center" });
+    x.tb.classList.add("iss-flash"); setTimeout(() => x.tb.classList.remove("iss-flash"), 1400);
+  };
+
   function itemsEditor(items) {
-    return `<div class="items-m" id="itemsM"></div><div class="table-wrap items-desk"><table class="t compact itbl" id="itemsTable"><thead><tr><th>ชื่อยา</th><th>ความแรง</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th><th>ควรมี</th><th>หน่วย</th><th></th></tr></thead>
+    return `<div id="issBox"></div><div class="items-m" id="itemsM"></div><div class="table-wrap items-desk"><table class="t compact itbl" id="itemsTable"><thead><tr><th>ชื่อยา</th><th>ความแรง</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th><th>ควรมี</th><th>หน่วย</th><th></th></tr></thead>
       ${groupDrugs(items).map(drugGroup).join("")}</table></div>
       <div class="row mt-12 wrap"><button class="btn sm" onclick="App.addItemRow()">${ic("plus")} เพิ่มยา</button><span class="xs faint items-desk">ยาเดียวกันหลาย lot ให้กด ${ic("plus")} lot ที่แถวของยานั้น</span><span class="xs faint items-mhint">แตะที่ยาเพื่อแก้ไข / เพิ่ม lot</span></div>`;
   }
@@ -455,7 +509,7 @@
     const dd = daysUntil(it.expiryDate);
     const color = !it.expiryDate ? "" : dd < 0 ? "color:var(--danger-text)" : dd <= nd ? "color:var(--warn-text)" : "";
     return `<td data-a="lot" data-l="Lot"><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" placeholder="Lot"></td>
-      <td data-a="exp" data-l="วันหมดอายุ">${dateSel('data-f="expiryDate"', it.expiryDate)}</td>
+      <td data-a="exp" data-l="วันหมดอายุ">${dateSel('data-f="expiryDate"', it.expiryDate, "App.itemFlags()")}</td>
       <td data-a="qty" data-l="จำนวน"><input class="input sm" type="number" min="0" data-f="qty" value="${esc(it.qty ?? 0)}" oninput="App.lotSum(this)"></td>`;
   }
   function lotRow(it = {}) {
@@ -466,7 +520,7 @@
     const h = lots[0] || {};
     const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
     return `<tbody data-drug>
-      <tr data-lot class="lot-head"><td data-a="name" data-l="ชื่อยา"><input class="input sm${drugKnown(h.drugName) ? "" : " warn-in"}" data-g="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(h.drugName || "")}"></td>
+      <tr data-lot class="lot-head"><td data-a="name" data-l="ชื่อยา"><input class="input sm${drugKnown(h.drugName) ? "" : " warn-in"}" data-g="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(h.drugName || "")}"><div class="iss-slot"></div></td>
         <td data-a="str" data-l="ความแรง"><input class="input sm" data-g="strength" value="${esc(h.strength || "")}"></td>
         ${lotCells(h)}
         <td data-a="req" data-l="ควรมี (รวม)"><input class="input sm" type="number" min="0" data-g="requiredQty" value="${esc(req)}" title="จำนวนที่ควรมีรวมทุก lot" oninput="App.lotSum(this)"></td>
@@ -495,6 +549,7 @@
     const t = sr.querySelector("[data-tot]"); t.textContent = tot; t.style.color = short ? "var(--danger-text)" : "";
     const m = sr.querySelector("[data-msg]"); m.textContent = short ? `ขาด ${req - tot}` : req ? "ครบ" : ""; m.style.color = short ? "var(--danger-text)" : "";
     m.classList.toggle("faint", !short);
+    App.itemFlags();
   };
   function itemsReadonly(items) {
     const nd = nearDays();
@@ -503,7 +558,8 @@
       const tot = lots.reduce((a, x) => a + Number(x.qty || 0), 0);
       const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
       const h = lots[0];
-      return lots.map((it, i) => `<tr class="${i ? "lot-sub" : ""}"><td data-l="ยา">${i ? `<span class="lot-tag">${ic("corner-down-right")} lot เพิ่ม</span>` : `${esc(h.drugName)} <span class="muted">${esc(h.strength || "")}</span>`}</td><td data-l="Lot">${esc(it.lot || "–")}</td><td data-l="หมดอายุ">${expPill(it.expiryDate, nd)}</td><td data-l="จำนวน" class="tabnum">${esc(it.qty)}${i ? "" : ` / ${esc(req || "–")} ${esc(h.unit || "")}`}${!i && lots.length > 1 ? ` <span class="xs faint">(รวม ${tot})</span>` : ""}</td></tr>`).join("");
+      const iss = drugIssue(lots.map((x) => ({ exp: x.expiryDate, qty: x.qty })), req);
+      return lots.map((it, i) => `<tr class="${i ? "lot-sub" : ""}" data-issue="${iss.lv}"><td data-l="ยา">${i ? `<span class="lot-tag">${ic("corner-down-right")} lot เพิ่ม</span>` : `${esc(h.drugName)} <span class="muted">${esc(h.strength || "")}</span>${iss.list.length ? `<div>${issBadges(iss)}</div>` : ""}`}</td><td data-l="Lot">${esc(it.lot || "–")}</td><td data-l="หมดอายุ">${expPill(it.expiryDate, nd)}</td><td data-l="จำนวน" class="tabnum">${esc(it.qty)}${i ? "" : ` / ${esc(req || "–")} ${esc(h.unit || "")}`}${!i && lots.length > 1 ? ` <span class="xs faint">(รวม ${tot})</span>` : ""}</td></tr>`).join("");
     }).join("");
     return `<div class="table-wrap"><table class="t compact responsive"><thead><tr><th>ชื่อยา</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
@@ -518,18 +574,19 @@
   // ---------- มือถือ: รายการสรุปอ่านง่าย + แตะเพื่อแก้ไขในแผ่นล่าง ----------
   // แผ่นแก้ไขย้าย <tbody> ตัวจริงเข้าไปชั่วคราว แล้วย้ายกลับเมื่อกด "เสร็จ" — ข้อมูลจึงมีชุดเดียว บันทึกด้วยปุ่มเดิม
   App.itemsM = () => {
+    App.itemFlags();
     const el = $("#itemsM"); if (!el) return;
     const nd = nearDays();
     const tbs = $$("#itemsTable tbody[data-drug]");
     el.innerHTML = tbs.length ? tbs.map((tb, i) => {
       const g = (f) => (tb.querySelector(`[data-g="${f}"]`)?.value || "").trim();
       const lots = [...tb.querySelectorAll("tr[data-lot]")].map((tr) => ({ lot: tr.querySelector('[data-f="lot"]').value.trim(), exp: tr.querySelector('[data-f="expiryDate"]').value, qty: Number(tr.querySelector('[data-f="qty"]').value || 0) }));
-      const tot = lots.reduce((a, x) => a + x.qty, 0), req = Number(g("requiredQty") || 0);
-      const short = req && tot < req;
-      const bad = lots.some((x) => x.exp && daysUntil(x.exp) < 0);
-      return `<button type="button" class="im-row" onclick="App.editDrug(${i})">
+      const req = Number(g("requiredQty") || 0);
+      const iss = drugIssue(lots, req), tot = iss.tot;
+      return `<button type="button" class="im-row" data-issue="${iss.lv}" onclick="App.editDrug(${i})">
         <div class="im-top"><div class="grow"><b>${esc(g("drugName") || "(ยังไม่ระบุชื่อ)")}</b> <span class="muted">${esc(g("strength"))}</span></div>
-          <span class="pill ${short || bad ? "danger" : "ok"}">${tot}${req ? "/" + req : ""} ${esc(g("unit"))}</span>${ic("chevron-right")}</div>
+          <span class="pill ${iss.list.some((x) => x.k === "short") ? "danger" : "ok"}">${tot}${req ? "/" + req : ""} ${esc(g("unit"))}</span>${ic("chevron-right")}</div>
+        ${iss.list.length ? `<div class="im-iss">${issBadges(iss)}</div>` : ""}
         <div class="im-lots">${lots.map((x) => `<div class="im-lot"><span class="mono">${esc(x.lot || "ไม่ระบุ lot")}</span>${x.exp ? expPill(x.exp, nd) : `<span class="xs faint">ไม่ระบุวันหมดอายุ</span>`}<span class="tabnum">× ${x.qty}</span></div>`).join("")}</div>
       </button>`;
     }).join("") : empty("ยังไม่มีรายการยา", "pill-off");
