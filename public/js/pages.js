@@ -331,10 +331,10 @@
     const b = boxById(S.param);
     if (!b) { $("#content").innerHTML = empty("ไม่พบกล่องยา", "box-off"); return; }
     setTitle(b.boxCode, `<button class="btn ghost" onclick="App.go('boxes')">${ic("arrow-left")} <span class="desktop-only">กล่องทั้งหมด</span></button>`);
-    const events = D().events.filter((e) => e.boxId === b.id).slice(0, 8);
+    const events = D().events.filter((e) => e.boxId === b.id).slice(0, 6);
     const qrSvg = qrSvgFor(b.qrUrl, 3);
     $("#content").innerHTML = `
-      <div class="split">
+      <div class="split box-split">
         <div class="col gap-16">
           <div class="card card-pad">
             <div class="row between wrap gap-12"><div><div class="xs faint">${esc(b.kitName || "ไม่ได้ผูกชุดมาตรฐาน")}</div><h2 style="font-size:24px">${esc(b.boxCode)}</h2><div class="muted small">${esc(b.location || "ยังไม่กำหนดจุด")} · ${b.locationZone === "out" ? "นอก รพ." : "ใน รพ."}</div></div>${boxPill(b)}</div>
@@ -344,15 +344,15 @@
               ${b.openCaseId ? `<button class="btn primary" onclick="App.go('case','${b.openCaseId}')">${ic("arrow-right")} ไปที่เคสที่ค้าง</button>` : ""}
             </div>
           </div>
-          ${isStaff() ? `<div class="card card-pad"><h3 class="mb-12">ข้อมูลกล่อง</h3><div class="form-grid">
-            ${field("รหัสกล่อง", `<input class="input" id="bxCode" value="${esc(b.boxCode)}">`)}
-            ${field("จุดวางกล่อง", `<select class="input" id="bxLoc">${opt([["", "ยังไม่กำหนด"], ...activeLocs().map((l) => [l.id, l.name])], b.locationId)}</select>`)}
-            ${field("ชุดยามาตรฐาน", `<select class="input" id="bxKit">${opt([["", "ไม่ผูก"], ...D().kits.map((k) => [k.id, k.name])], b.kitId)}</select>`)}
-            ${field("เลขซีล", `<input class="input" id="bxSeal" value="${esc(b.sealNo || "")}">`)}
-            ${field("หมายเหตุ", `<input class="input" id="bxNote" value="${esc(b.note || "")}">`, "", "full")}</div>
-            <div class="row mt-16" style="justify-content:flex-end">${isAdmin() ? `<button class="btn danger-ghost" onclick="App.deleteBox('${b.id}')">${ic("trash")} ลบกล่อง</button>` : ""}<span class="grow"></span><button class="btn primary" id="bxBtn" onclick="App.saveBox('${b.id}')">บันทึกการเปลี่ยนแปลง</button></div></div>` : ""}
+          <div class="card">
+        <div class="card-head"><h3 class="grow">รายการยาในกล่อง</h3><span class="xs faint">${b.items.length} รายการ (แยก lot)</span></div>
+        <div class="card-body">${isStaff() ? itemsEditor(b.items) : itemsReadonly(b.items)}</div>
+        ${isStaff() ? `<div class="card-body row" style="border-top:1px solid var(--border);justify-content:flex-end"><button class="btn primary" onclick="App.saveBox('${b.id}')">บันทึกรายการยา</button></div>` : ""}
+      </div>
+          <div class="card"><div class="card-head"><h3 class="grow">ประวัติการเปิด</h3></div>
+            ${events.length ? events.map((e) => `<div class="list-row click" onclick="App.go('case','${e.id}')"><div class="grow"><div class="small" style="font-weight:550">${fmtDT(e.actualOpenedAt)}</div><div class="xs faint">${esc(e.reasonCategory || "")} · ${esc(e.eventCode || "")}</div></div>${casePill(e)}</div>`).join("") : empty("ยังไม่เคยถูกเปิด", "history-off")}</div>
         </div>
-        <div class="col gap-16">
+        <div class="col gap-16 box-side">
           <div class="card card-pad center">
             <div style="width:168px;margin:0 auto" class="qr">${qrSvg}</div>
             <div class="xs faint mt-8">QR สำหรับหน้างาน · สแกนแล้วบันทึกการเปิดได้ทันที</div>
@@ -364,14 +364,14 @@
             <div class="row between mt-8"><span class="muted">พร้อมใช้ล่าสุด</span><span>${fmtDT(b.lastReadyAt)}</span></div>
             <div class="row between mt-8"><span class="muted">เลขซีล</span><span class="mono">${esc(b.sealNo || "–")}</span></div>
           </div>
-          <div class="card"><div class="card-head"><h3 class="grow">ประวัติการเปิด</h3></div>
-            ${events.length ? events.map((e) => `<div class="list-row click" onclick="App.go('case','${e.id}')"><div class="grow"><div class="small" style="font-weight:550">${fmtDT(e.actualOpenedAt)}</div><div class="xs faint">${esc(e.reasonCategory || "")} · ${esc(e.eventCode || "")}</div></div>${casePill(e)}</div>`).join("") : empty("ยังไม่เคยถูกเปิด", "history-off")}</div>
+          ${isStaff() ? `<div class="card card-pad"><h3 class="mb-12">ข้อมูลกล่อง</h3><div class="form-grid">
+            ${field("รหัสกล่อง", `<input class="input" id="bxCode" value="${esc(b.boxCode)}">`)}
+            ${field("จุดวางกล่อง", `<select class="input" id="bxLoc">${opt([["", "ยังไม่กำหนด"], ...activeLocs().map((l) => [l.id, l.name])], b.locationId)}</select>`)}
+            ${field("ชุดยามาตรฐาน", `<select class="input" id="bxKit">${opt([["", "ไม่ผูก"], ...D().kits.map((k) => [k.id, k.name])], b.kitId)}</select>`)}
+            ${field("เลขซีล", `<input class="input" id="bxSeal" value="${esc(b.sealNo || "")}">`)}
+            ${field("หมายเหตุ", `<input class="input" id="bxNote" value="${esc(b.note || "")}">`, "", "full")}</div>
+            <div class="row mt-16" style="justify-content:flex-end">${isAdmin() ? `<button class="btn danger-ghost" onclick="App.deleteBox('${b.id}')">${ic("trash")} ลบกล่อง</button>` : ""}<span class="grow"></span><button class="btn primary" id="bxBtn" onclick="App.saveBox('${b.id}')">บันทึกการเปลี่ยนแปลง</button></div></div>` : ""}
         </div>
-      </div>
-      <div class="card section">
-        <div class="card-head"><h3 class="grow">รายการยาในกล่อง</h3><span class="xs faint">${b.items.length} รายการ (แยก lot)</span></div>
-        <div class="card-body">${isStaff() ? itemsEditor(b.items) : itemsReadonly(b.items)}</div>
-        ${isStaff() ? `<div class="card-body row" style="border-top:1px solid var(--border);justify-content:flex-end"><button class="btn primary" onclick="App.saveBox('${b.id}')">บันทึกรายการยา</button></div>` : ""}
       </div>`;
   };
 
@@ -395,7 +395,7 @@
 
   // ---------- items editor ----------
   function itemsEditor(items) {
-    return `<div class="table-wrap"><table class="t compact" id="itemsTable"><thead><tr><th style="min-width:150px">ชื่อยา</th><th>ความแรง</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th><th>ควรมี</th><th>หน่วย</th><th></th></tr></thead>
+    return `<div class="table-wrap"><table class="t compact" id="itemsTable"><thead><tr><th>ชื่อยา</th><th>ความแรง</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th><th>ควรมี</th><th>หน่วย</th><th></th></tr></thead>
       <tbody>${items.map(itemRow).join("")}</tbody></table></div>
       <div class="row mt-12"><button class="btn sm" onclick="App.addItemRow()">${ic("plus")} เพิ่มรายการ</button><span class="xs faint">ยาเดียวกันหลาย lot ให้กด ${ic("copy")} เพื่อเพิ่ม lot</span></div>`;
   }
@@ -404,12 +404,12 @@
     const dd = daysUntil(it.expiryDate);
     const color = !it.expiryDate ? "" : dd < 0 ? "color:var(--danger-text)" : dd <= nd ? "color:var(--warn-text)" : "";
     return `<tr data-item><td><input class="input sm${drugKnown(it.drugName) ? "" : " warn-in"}" data-f="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(it.drugName || "")}"></td>
-      <td><input class="input sm" data-f="strength" value="${esc(it.strength || "")}" style="width:90px"></td>
-      <td><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" style="width:90px"></td>
+      <td><input class="input sm" data-f="strength" value="${esc(it.strength || "")}" style="width:84px"></td>
+      <td><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" style="width:80px"></td>
       <td><input class="input sm" type="date" data-f="expiryDate" value="${esc(it.expiryDate || "")}" style="${color}"></td>
-      <td><input class="input sm" type="number" min="0" data-f="qty" value="${esc(it.qty ?? 0)}" style="width:70px"></td>
-      <td><input class="input sm" type="number" min="0" data-f="requiredQty" value="${esc(it.requiredQty ?? 0)}" style="width:70px"></td>
-      <td><input class="input sm" data-f="unit" list="unitList" value="${esc(it.unit || "")}" style="width:80px"><input type="hidden" data-f="form" value="${esc(it.form || "")}"></td>
+      <td><input class="input sm" type="number" min="0" data-f="qty" value="${esc(it.qty ?? 0)}" style="width:62px"></td>
+      <td><input class="input sm" type="number" min="0" data-f="requiredQty" value="${esc(it.requiredQty ?? 0)}" style="width:62px"></td>
+      <td><input class="input sm" data-f="unit" list="unitList" value="${esc(it.unit || "")}" style="width:72px"><input type="hidden" data-f="form" value="${esc(it.form || "")}"></td>
       <td class="nowrap"><button class="btn ghost sm icon" title="เพิ่ม lot" onclick="App.dupItem(this)">${ic("copy")}</button><button class="btn ghost sm icon" title="ลบ" onclick="this.closest('tr').remove()">${ic("x")}</button></td></tr>`;
   }
   function itemsReadonly(items) {
