@@ -1,4 +1,5 @@
-window.SEB_SUPABASE_URL = "https://xsjenlppfpuykxwjbbfp.supabase.co";
-window.SEB_SUPABASE_ANON_KEY = "sb_publishable_xT8eePLA8aZqBsE-IPnKpg_UGaTIZP3";
-// VAPID public key สำหรับ Web Push (ได้จากขั้นตอนติดตั้ง ข้อ 3) — เว้นว่างได้ ระบบจะดึงจากเซิร์ฟเวอร์
+// ไฟล์นี้ถูกเขียนใหม่ตอน build (GitHub Pages / Cloudflare Pages) จาก Environment variables
+// ถ้าเห็นค่าว่าง แปลว่า build ไม่ได้รันคำสั่งเขียน config — ระบบจะเข้าโหมดตัวอย่าง
+window.SEB_SUPABASE_URL = "";
+window.SEB_SUPABASE_ANON_KEY = "";
 window.SEB_VAPID_PUBLIC_KEY = "";
