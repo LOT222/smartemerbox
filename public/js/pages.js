@@ -5,7 +5,7 @@
   const X = window.SEB;
   const { S, api, esc, ic, $, $$, val, fmtD, fmtT, fmtDT, ago, minutes, fmtMin, localInput, daysUntil, initials, download, toCsv,
     ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, toast, fail, dialog, drawer, closeDrawer,
-    kpi, empty, field, opt, setTitle } = X;
+    kpi, empty, field, opt, setTitle, dateSel, fmtDLong } = X;
   const App = window.App;
 
   const D = () => S.data;
@@ -371,6 +371,7 @@
             <div class="row mt-16" style="justify-content:flex-end">${isAdmin() ? `<button class="btn danger-ghost" onclick="App.deleteBox('${b.id}')">${ic("trash")} ลบกล่อง</button>` : ""}<span class="grow"></span><button class="btn primary" id="bxBtn" onclick="App.saveBox('${b.id}')">บันทึกการเปลี่ยนแปลง</button></div></div>` : ""}
         </div>
       </div>`;
+    App.closeDrugSheet();
     if (S.histBox !== b.id) { S.histBox = b.id; S.histPage = 1; S.histAll = null; }
     App.boxHist();
   };
@@ -417,6 +418,7 @@
   };
 
   App.saveBox = withBusy("#bxBtn", async (id) => {
+    App.closeDrugSheet();
     const reason = await dialog({ title: "เหตุผลการแก้ไข", body: "บันทึกไว้ใน audit log เพื่อการตรวจสอบย้อนหลัง", input: { placeholder: "เหตุผล", required: true, choices: optList("OPT_BOX_EDIT_REASONS") }, confirm: "บันทึก" });
     if (!reason) return;
     const kit = D().kits.find((k) => k.id === val("bxKit"));
@@ -444,16 +446,16 @@
     return [...m.values()];
   }
   function itemsEditor(items) {
-    return `<div class="table-wrap"><table class="t compact" id="itemsTable"><thead><tr><th>ชื่อยา</th><th>ความแรง</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th><th>ควรมี</th><th>หน่วย</th><th></th></tr></thead>
+    return `<div class="items-m" id="itemsM"></div><div class="table-wrap items-desk"><table class="t compact itbl" id="itemsTable"><thead><tr><th>ชื่อยา</th><th>ความแรง</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th><th>ควรมี</th><th>หน่วย</th><th></th></tr></thead>
       ${groupDrugs(items).map(drugGroup).join("")}</table></div>
-      <div class="row mt-12 wrap"><button class="btn sm" onclick="App.addItemRow()">${ic("plus")} เพิ่มยา</button><span class="xs faint">ยาเดียวกันหลาย lot ให้กด ${ic("plus")} lot ที่แถวของยานั้น</span></div>`;
+      <div class="row mt-12 wrap"><button class="btn sm" onclick="App.addItemRow()">${ic("plus")} เพิ่มยา</button><span class="xs faint items-desk">ยาเดียวกันหลาย lot ให้กด ${ic("plus")} lot ที่แถวของยานั้น</span><span class="xs faint items-mhint">แตะที่ยาเพื่อแก้ไข / เพิ่ม lot</span></div>`;
   }
   function lotCells(it) {
     const nd = nearDays();
     const dd = daysUntil(it.expiryDate);
     const color = !it.expiryDate ? "" : dd < 0 ? "color:var(--danger-text)" : dd <= nd ? "color:var(--warn-text)" : "";
     return `<td data-a="lot" data-l="Lot"><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" placeholder="Lot"></td>
-      <td data-a="exp" data-l="วันหมดอายุ"><input class="input sm" type="date" data-f="expiryDate" value="${esc(it.expiryDate || "")}" style="${color}"></td>
+      <td data-a="exp" data-l="วันหมดอายุ">${dateSel('data-f="expiryDate"', it.expiryDate)}</td>
       <td data-a="qty" data-l="จำนวน"><input class="input sm" type="number" min="0" data-f="qty" value="${esc(it.qty ?? 0)}" oninput="App.lotSum(this)"></td>`;
   }
   function lotRow(it = {}) {
@@ -505,9 +507,68 @@
     }).join("");
     return `<div class="table-wrap"><table class="t compact responsive"><thead><tr><th>ชื่อยา</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
+  const isMobile = () => window.matchMedia("(max-width: 760px)").matches;
   App.addItemRow = () => {
     $("#itemsTable").insertAdjacentHTML("beforeend", drugGroup([{}]));
-    const tbs = $$("#itemsTable tbody[data-drug]"); tbs[tbs.length - 1].querySelector('[data-g="drugName"]').focus();
+    const tbs = $$("#itemsTable tbody[data-drug]");
+    if (isMobile()) return App.editDrug(tbs.length - 1, true);
+    tbs[tbs.length - 1].querySelector('[data-g="drugName"]').focus();
+  };
+
+  // ---------- มือถือ: รายการสรุปอ่านง่าย + แตะเพื่อแก้ไขในแผ่นล่าง ----------
+  // แผ่นแก้ไขย้าย <tbody> ตัวจริงเข้าไปชั่วคราว แล้วย้ายกลับเมื่อกด "เสร็จ" — ข้อมูลจึงมีชุดเดียว บันทึกด้วยปุ่มเดิม
+  App.itemsM = () => {
+    const el = $("#itemsM"); if (!el) return;
+    const nd = nearDays();
+    const tbs = $$("#itemsTable tbody[data-drug]");
+    el.innerHTML = tbs.length ? tbs.map((tb, i) => {
+      const g = (f) => (tb.querySelector(`[data-g="${f}"]`)?.value || "").trim();
+      const lots = [...tb.querySelectorAll("tr[data-lot]")].map((tr) => ({ lot: tr.querySelector('[data-f="lot"]').value.trim(), exp: tr.querySelector('[data-f="expiryDate"]').value, qty: Number(tr.querySelector('[data-f="qty"]').value || 0) }));
+      const tot = lots.reduce((a, x) => a + x.qty, 0), req = Number(g("requiredQty") || 0);
+      const short = req && tot < req;
+      const bad = lots.some((x) => x.exp && daysUntil(x.exp) < 0);
+      return `<button type="button" class="im-row" onclick="App.editDrug(${i})">
+        <div class="im-top"><div class="grow"><b>${esc(g("drugName") || "(ยังไม่ระบุชื่อ)")}</b> <span class="muted">${esc(g("strength"))}</span></div>
+          <span class="pill ${short || bad ? "danger" : "ok"}">${tot}${req ? "/" + req : ""} ${esc(g("unit"))}</span>${ic("chevron-right")}</div>
+        <div class="im-lots">${lots.map((x) => `<div class="im-lot"><span class="mono">${esc(x.lot || "ไม่ระบุ lot")}</span>${x.exp ? expPill(x.exp, nd) : `<span class="xs faint">ไม่ระบุวันหมดอายุ</span>`}<span class="tabnum">× ${x.qty}</span></div>`).join("")}</div>
+      </button>`;
+    }).join("") : empty("ยังไม่มีรายการยา", "pill-off");
+  };
+  App.editDrug = (idx, isNew) => {
+    const tb = $$("#itemsTable tbody[data-drug]")[idx]; if (!tb) return;
+    App.closeDrugSheet();
+    const ph = document.createComment("drug-slot");
+    tb.before(ph);
+    S._sheet = { tb, ph };
+    const el = document.createElement("div");
+    el.className = "sheet-back";
+    el.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><div class="sheet-head"><h3 class="grow">${isNew ? "เพิ่มยา" : "แก้ไขรายการยา"}</h3><button class="btn ghost sm icon" title="ปิด" onclick="App.closeDrugSheet()">${ic("x")}</button></div>
+      <div class="sheet-body"><table class="itbl sheet-tbl"></table>
+        <button class="btn sm mt-12" style="width:100%;justify-content:center" onclick="App.dupItem(document.querySelector('.sheet-tbl tbody [title=\'เพิ่ม lot ของยานี้\']'))">${ic("plus")} เพิ่ม lot ของยานี้</button></div>
+      <div class="sheet-foot"><button class="btn danger-ghost" onclick="App.delDrugSheet()">${ic("trash")} ลบยานี้</button><span class="grow"></span><button class="btn primary" onclick="App.closeDrugSheet()">เสร็จ</button></div></div>`;
+    el.addEventListener("click", (e) => { if (e.target === el) App.closeDrugSheet(); });
+    document.body.append(el);
+    el.querySelector(".sheet-tbl").append(tb);
+    document.body.classList.add("sheet-open");
+    if (isNew) setTimeout(() => tb.querySelector('[data-g="drugName"]').focus(), 50);
+  };
+  App.closeDrugSheet = () => {
+    const sh = S._sheet;
+    if (sh) {
+      if (sh.tb.isConnected || sh.ph.isConnected) {
+        if (sh.ph.isConnected) sh.ph.replaceWith(sh.tb);
+        if (!sh.tb.querySelector('[data-g="drugName"]')?.value.trim() && ![...sh.tb.querySelectorAll('[data-f="lot"]')].some((x) => x.value.trim())) sh.tb.remove();
+      }
+      S._sheet = null;
+    }
+    $$(".sheet-back").forEach((x) => x.remove());
+    document.body.classList.remove("sheet-open");
+    App.itemsM();
+  };
+  App.delDrugSheet = () => {
+    const sh = S._sheet; if (!sh) return;
+    sh.tb.remove(); sh.ph.remove();
+    App.closeDrugSheet();
   };
   App.dupItem = (btn) => {
     const tb = btn.closest("tbody[data-drug]");
@@ -519,10 +580,10 @@
   App.delLot = (btn) => {
     const tr = btn.closest("tr"), tb = tr.closest("tbody[data-drug]");
     const lots = [...tb.querySelectorAll("tr[data-lot]")];
-    if (lots.length === 1) { tb.remove(); return; }              // lot เดียว = ลบยารายการนี้
+    if (lots.length === 1) { if (S._sheet?.tb === tb) return App.delDrugSheet(); tb.remove(); App.itemsM(); return; }   // lot เดียว = ลบยารายการนี้
     if (tr.classList.contains("lot-head")) {                      // ลบ lot แรก: ยก lot ถัดไปขึ้นมาแทน
       const nx = lots[1];
-      ["lot", "expiryDate", "qty"].forEach((f) => { const src = nx.querySelector(`[data-f="${f}"]`); const dst = tr.querySelector(`[data-f="${f}"]`); dst.value = src.value; dst.style.color = src.style.color; });
+      ["lot", "exp", "qty"].forEach((a) => tr.querySelector(`td[data-a="${a}"]`).replaceChildren(...nx.querySelector(`td[data-a="${a}"]`).childNodes));
       nx.remove();
     } else tr.remove();
     App.lotSum(tb.querySelector("input"));
@@ -640,7 +701,7 @@
           <td data-a="name"><b>${esc(it.drugName)}</b> <span class="muted">${esc(it.strength || "")}</span></td><td class="tabnum" data-a="req" data-l="ควรมี">${esc(it.requiredQty || "–")}</td>
           <td data-a="qty" data-l="จำนวนจริง"><input class="input sm" type="number" min="0" data-f="actualQty" value="${esc(it.qty ?? "")}" style="width:76px" oninput="App.insAuto(this)"></td>
           <td data-a="lot" data-l="Lot"><input class="input sm" data-f="lot" value="${esc(it.lot || "")}" style="width:100px"></td>
-          <td data-a="exp" data-l="วันหมดอายุ"><input class="input sm" type="date" data-f="expiryDate" value="${esc(it.expiryDate || "")}" oninput="App.insAuto(this)"></td>
+          <td data-a="exp" data-l="วันหมดอายุ">${dateSel('data-f="expiryDate"', it.expiryDate, "App.insAuto(this)")}</td>
           <td data-a="st" data-l="สถานะ"><select class="input sm" data-f="status" onchange="this.dataset.manual=1;App.insSummary()">${opt([["normal", "ปกติ"], ["near", "ใกล้หมด"], ["expired", "หมดอายุ"], ["missing", "ขาด"]], autoStatus(it))}</select></td></tr>`).join("")}</tbody></table></div></div>
       <div class="card card-pad mt-16"><div class="form-grid">
         ${field("เลขซีล", `<input class="input" id="insSeal" value="${esc(b.sealNo || "")}">`)}

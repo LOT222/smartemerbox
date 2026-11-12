@@ -359,9 +359,44 @@
     document.title = `${t} · SEB`;
   }
 
+  // ---------------- ช่องเลือกวันที่: กรอกเป็น ค.ศ. + เดือนมีเลขกำกับ, แสดงผลเป็น พ.ศ. ----------------
+  // เก็บค่าจริงใน <input type="hidden" ...attrs> รูปแบบ YYYY-MM-DD เพื่อให้โค้ดเดิมอ่าน .value ได้เหมือนเดิม
+  const EN_M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function dateSel(attrs, iso, onch) {
+    const v = /^\d{4}-\d{2}-\d{2}/.test(String(iso || "")) ? String(iso).slice(0, 10) : "";
+    const [y, m, d] = v ? v.split("-") : ["", "", ""];
+    const Y = new Date().getFullYear();
+    const years = []; for (let i = Y - 3; i <= Y + 12; i++) years.push(String(i));
+    if (y && !years.includes(y)) years.push(y), years.sort();
+    const o = (val, txt, cur) => `<option value="${val}"${val === cur ? " selected" : ""}>${txt}</option>`;
+    const h = `onchange="SEB.dateSync(this)${onch ? ";" + onch : ""}"`;
+    const dd = daysUntil(v), st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
+    return `<span class="dsel" data-st="${st}"><input type="hidden" ${attrs} value="${v}">
+      <select class="input sm" data-p="d" aria-label="วัน" ${h}>${o("", "วัน", d)}${Array.from({ length: 31 }, (_, i) => { const t = String(i + 1).padStart(2, "0"); return o(t, String(i + 1), d); }).join("")}</select>
+      <select class="input sm" data-p="m" aria-label="เดือน" ${h}>${o("", "เดือน", m)}${EN_M.map((n, i) => { const t = String(i + 1).padStart(2, "0"); return o(t, `${n} (${i + 1})`, m); }).join("")}</select>
+      <select class="input sm" data-p="y" aria-label="ปี ค.ศ." ${h}>${o("", "ปี ค.ศ.", y)}${years.map((t) => o(t, t, y)).join("")}</select>
+      <small class="dsel-th">${v ? "= " + fmtDLong(v) : ""}</small></span>`;
+  }
+  function fmtDLong(v) { const d = new Date(v + "T00:00:00"); return isNaN(d) ? "" : `${d.getDate()} ${TH_M[d.getMonth()]} ${d.getFullYear() + 543}`; }
+  function dateSync(sel) {
+    const w = sel.closest(".dsel"); if (!w) return;
+    const g = (p) => w.querySelector(`[data-p="${p}"]`);
+    let d = g("d").value; const m = g("m").value, y = g("y").value;
+    let v = "";
+    if (d && m && y) {
+      const last = new Date(+y, +m, 0).getDate();               // กันวันที่ 31 ในเดือนที่มี 30 วัน
+      if (+d > last) { d = String(last).padStart(2, "0"); g("d").value = d; }
+      v = `${y}-${m}-${d}`;
+    }
+    w.querySelector('input[type="hidden"]').value = v;
+    const dd = daysUntil(v);
+    w.dataset.st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
+    w.querySelector(".dsel-th").textContent = v ? "= " + fmtDLong(v) : (d || m || y ? "เลือกให้ครบ วัน / เดือน / ปี" : "");
+  }
+
   // ---------------- export ----------------
   window.SEB = {
-    S, api, DEMO, IDLE_MS, Q,
+    S, api, DEMO, IDLE_MS, Q, dateSel, dateSync, fmtDLong,
     APP_VERSION, getTheme, setTheme, esc, ic, $, $$, val, fmtD, fmtT, fmtDT, ago, minutes, fmtMin, localInput, todayStr, daysUntil, initials, sum, uid, download, toCsv,
     BOX_STATE, CASE_STATE, ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, LOGO_B, HOSP_LOGO, hospLogoAbs, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, isRealAdmin, withSim, LOGO,
     toast, fail, dialog, drawer, closeDrawer, kpi, empty, field, opt, renderShell, renderNav, setTitle, TITLES,

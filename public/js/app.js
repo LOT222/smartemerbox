@@ -140,6 +140,7 @@
   App.go = function (view, param = "", fromHash = false) {
     if (!S.user) return;
     App.closeDrawer?.();
+    App.closeDrugSheet?.();
     S.view = view;
     S.param = param;
     if (!fromHash) { try { history.replaceState(null, "", `${location.pathname}${location.search}#/${view}${param ? "/" + param : ""}`); } catch (_) {} }
