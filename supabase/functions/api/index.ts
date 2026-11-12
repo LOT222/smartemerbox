@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.12.0";
+const APP_VERSION = "2.13.0";
 const SCHEMA_REQUIRED = 5; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -135,6 +135,7 @@ const actions: Record<string, Fn> = {
   apiDeleteUser,
   apiSaveSettings,
   apiTestNotify,
+  apiFlexPreview,
   apiSavePushSubscription,
   apiRemovePushSubscription,
   apiSendExpiryReport,
@@ -1503,7 +1504,7 @@ function buildExpiryFlex(due: any[], settings: any) {
       type: "box", layout: "horizontal", margin: "md",
       contents: [
         { type: "box", layout: "vertical", flex: 5, contents: [txt(`${it.drugName} ${it.strength || ""}`, "sm", C.ink, true), txt(`${it.boxCode} · ${it.location || "-"} · lot ${it.lot || "-"}`, "xxs", C.muted)] },
-        { type: "box", layout: "vertical", flex: 2, contents: [txt(`${it.days} วัน`, "sm", it.days <= 7 ? C.red : it.days <= 15 ? C.amber : C.ink, true, { align: "end" }), txt(`หมด ${fmtDate(it.expiryDate)}`, "xxs", C.muted, false, { align: "end" })] },
+        { type: "box", layout: "vertical", flex: 2, contents: [txt(`${it.days} วัน`, "sm", it.days <= 7 ? C.red : it.days <= 15 ? C.amber : C.ink, true, { align: "end" }), txt(`หมด ${fmtDateNum(it.expiryDate)}`, "xxs", C.muted, false, { align: "end" })] },
       ],
     });
     if (list.length > 10) contents.push(txt(`และอีก ${list.length - 10} รายการ`, "xs", C.muted, false, { margin: "sm" }));
@@ -1512,7 +1513,7 @@ function buildExpiryFlex(due: any[], settings: any) {
     type: "flex", altText: `[SEB] ยาใกล้หมดอายุ ${due.length} รายการ`,
     contents: {
       type: "bubble",
-      header: { type: "box", layout: "vertical", paddingAll: "18px", contents: [txt("แจ้งเตือนยาใกล้หมดอายุ", "xs", C.amber, true), txt(`${due.length} รายการ · ${fmtDate(nowIso())}`, "lg", C.ink, true, { margin: "sm" })] },
+      header: band("ยาใกล้หมดอายุ", `${due.length} รายการ · ${fmtDateNum(nowIso())}`, "#D97706"),
       body: { type: "box", layout: "vertical", paddingAll: "18px", contents },
       footer: footer(settings),
     },
@@ -1628,34 +1629,57 @@ function footer(settings: any) {
       txt(`${settings.HOSPITAL_NAME || ""} · ${settings.DEPARTMENT_NAME || ""}`, "xxs", C.muted, false, { margin: "md", align: "center" })],
   };
 }
+// แถบหัวการ์ดสีทึบ (แดง = เปิดกล่อง, ส้ม = ยังไม่มีผู้รับทราบ / ยาใกล้หมดอายุ)
+function band(title: string, sub: string, bg: string) {
+  return { type: "box", layout: "vertical", paddingAll: "18px", paddingBottom: "16px", backgroundColor: bg,
+    contents: [txt(title, "xl", "#FFFFFF", true), txt(sub, "xs", "#FFFFFFCC", false, { margin: "xs" })] };
+}
+function irow(icon: string, label: string, value: string, opts: any = {}) {
+  return { type: "box", layout: "horizontal", spacing: "md", margin: opts.margin || "md",
+    contents: [txt(`${icon} ${label}`, "sm", C.muted, false, { flex: 4 }), txt(value, opts.size || "sm", opts.color || C.ink, true, { flex: 6 })] };
+}
+function fmtDateNum(iso: string) { const p = bkkParts(new Date(iso)); return `${p.d}/${p.m}/${Number(p.y) + 543}`; }
 function buildOpenFlex(event: any, box: any, settings: any, escalation: boolean) {
-  const color = escalation ? C.amber : C.red;
+  const color = escalation ? "#D97706" : "#C8363B";
+  const at = event.actualOpenedAt || nowIso();
+  const mins = escalation ? Math.max(0, Math.round((Date.now() - new Date(at).getTime()) / 60000)) : 0;
   return {
     type: "flex",
-    altText: `[SEB] ${escalation ? "ยังไม่มีผู้รับทราบ" : "เปิดกล่องยา"} ${box.boxCode}`,
+    altText: `[SEB] ${escalation ? "ยังไม่มีผู้รับทราบ" : "เปิดกล่องยา"} ${box.boxCode} · ${event.locationName || box.location || ""}`,
     contents: {
       type: "bubble",
-      header: {
-        type: "box", layout: "vertical", paddingAll: "18px", backgroundColor: "#FFFFFF",
-        contents: [
-          { type: "box", layout: "horizontal", contents: [{ type: "box", layout: "vertical", width: "8px", height: "8px", cornerRadius: "4px", backgroundColor: color, offsetTop: "6px", contents: [] }, txt(escalation ? "ยังไม่มีผู้รับทราบ" : "เปิดกล่องยาฉุกเฉิน", "xs", color, true, { margin: "sm" })] },
-          txt(box.boxCode, "xxl", C.ink, true, { margin: "sm" }),
-          txt(event.locationName || box.location || "-", "sm", C.muted),
-        ],
-      },
+      header: band(escalation ? "ยังไม่มีผู้รับทราบ!" : "เปิดกล่องยาฉุกเฉิน!", escalation ? `เปิดกล่องมาแล้ว ${mins} นาที · กรุณารับทราบในระบบ` : "Smart Emergency Box (SEB)", color),
       body: {
-        type: "box", layout: "vertical", spacing: "sm", paddingAll: "18px",
+        type: "box", layout: "vertical", paddingAll: "18px",
         contents: [
-          row("รหัสเหตุการณ์", event.eventCode),
-          row("เหตุผล", event.reasonCategory || "-"),
-          row("เวลาเปิดใช้", `${fmtDate(event.actualOpenedAt)} ${fmtTime(event.actualOpenedAt)} น.`),
-          row("ผู้เปิด", event.openerName || "-"),
+          irow("📦", "กล่องยา", box.boxCode, { size: "lg", color, margin: "none" }),
+          irow("📍", "สถานที่", event.locationName || box.location || "-", { size: "md" }),
+          { type: "separator", margin: "lg", color: C.line },
+          irow("📅", "วันที่", fmtDateNum(at), { margin: "lg" }),
+          irow("⏰", "เวลาเปิดใช้", `${fmtTime(at)} น.`),
+          irow("🩺", "เหตุผล", event.reasonCategory || "-"),
+          irow("👤", "ผู้เปิด", event.openerName || "-"),
+          irow("🔖", "รหัสเหตุการณ์", event.eventCode || "-"),
         ],
       },
       footer: footer(settings),
       styles: { footer: { separator: true, separatorColor: C.line } },
     },
   };
+}
+// ตัวอย่างการ์ดสำหรับหน้า "ตั้งค่า" — ใช้ฟังก์ชันจริงชุดเดียวกับที่ส่ง LINE
+async function apiFlexPreview(_c: Ctx, token: string) {
+  await requireAdmin(token);
+  const settings = await settingsObject();
+  const now = nowIso();
+  const box = { boxCode: "ER-01", location: "ห้องอุบัติเหตุ-ฉุกเฉิน (ER)" };
+  const ev = { eventCode: "EV-2611-AB12C", reasonCategory: "CPR", actualOpenedAt: new Date(Date.now() - 12 * 60000).toISOString(), openerName: "พว.ตัวอย่าง", locationName: box.location };
+  const d = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  const due = [
+    { milestone: 7, drugName: "Adrenaline inj.", strength: "1 mg/ml", boxCode: "ER-01", location: box.location, lot: "J690045", expiryDate: d(6), days: 6 },
+    { milestone: 30, drugName: "Atropine inj.", strength: "0.6 mg/ml", boxCode: "WARD-1", location: "หอผู้ป่วยใน", lot: "J670368", expiryDate: d(28), days: 28 },
+  ];
+  return { open: buildOpenFlex(ev, box, settings, false), escalate: buildOpenFlex(ev, box, settings, true), expiry: buildExpiryFlex(due, settings), test: buildTestFlex(settings), at: now };
 }
 function buildDigestFlex(items: any[], overdue: any[], settings: any) {
   const lines = items.slice(0, 8).map((it) => ({
@@ -1674,7 +1698,7 @@ function buildDigestFlex(items: any[], overdue: any[], settings: any) {
     type: "flex", altText: `[SEB] สรุปประจำวัน ยาใกล้หมดอายุ ${items.length} รายการ`,
     contents: {
       type: "bubble",
-      header: { type: "box", layout: "vertical", paddingAll: "18px", contents: [txt("สรุปประจำวัน", "xs", C.accent, true), txt("ยาใกล้หมดอายุ / เลยวันตรวจ", "lg", C.ink, true, { margin: "sm" })] },
+      header: band("สรุปประจำวัน", `ยาใกล้หมดอายุ / เลยวันตรวจ · ${fmtDateNum(nowIso())}`, "#4F46E5"),
       body: { type: "box", layout: "vertical", paddingAll: "18px", contents: lines },
       footer: footer(settings),
     },
@@ -1683,7 +1707,7 @@ function buildDigestFlex(items: any[], overdue: any[], settings: any) {
 function buildTestFlex(settings: any) {
   return {
     type: "flex", altText: "[SEB] ทดสอบการแจ้งเตือน",
-    contents: { type: "bubble", body: { type: "box", layout: "vertical", paddingAll: "18px", contents: [txt("ทดสอบการแจ้งเตือน", "lg", C.ink, true), txt(`${fmtDate(nowIso())} ${fmtTime(nowIso())} น. · ระบบทำงานปกติ`, "sm", C.muted, false, { margin: "sm" })] }, footer: footer(settings) },
+    contents: { type: "bubble", header: band("ทดสอบการแจ้งเตือน", "Smart Emergency Box (SEB)", "#C8363B"), body: { type: "box", layout: "vertical", paddingAll: "18px", contents: [txt(`${fmtDateNum(nowIso())} ${fmtTime(nowIso())} น. · ระบบทำงานปกติ`, "sm", C.ink, true)] }, footer: footer(settings) },
   };
 }
 

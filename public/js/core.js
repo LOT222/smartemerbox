@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.12.0";
+  const APP_VERSION = "2.13.0";
 
   const S = {
     demo: DEMO,
@@ -42,7 +42,7 @@
 
   // ---------------- API ----------------
   // โหมดจำลองบทบาท (ผู้ดูแลดูหน้าตาบทบาทอื่น): อ่านได้อย่างเดียว ห้ามบันทึก/แก้ไขใด ๆ
-  const SIM_READ = new Set(["apiBootstrap", "apiRefresh", "apiGetEvent", "apiListInspections", "apiGetInspection", "apiListLogs", "apiMonthlyReport", "apiReport", "apiConsentStatus", "apiListConsents", "apiGetConsent", "apiLineQuota", "apiPublicGetBox", "apiPublicConfig", "apiHealth", "apiListAccountRequests", "apiResearchData", "apiLogout"]);
+  const SIM_READ = new Set(["apiBootstrap", "apiRefresh", "apiGetEvent", "apiListInspections", "apiGetInspection", "apiListLogs", "apiMonthlyReport", "apiReport", "apiConsentStatus", "apiListConsents", "apiGetConsent", "apiLineQuota", "apiPublicGetBox", "apiPublicConfig", "apiHealth", "apiFlexPreview", "apiListAccountRequests", "apiResearchData", "apiLogout"]);
   async function api(name, ...args) {
     if (S.sim && !SIM_READ.has(name)) {
       const e = new Error(`โหมดจำลองบทบาท "${ROLE[S.sim] || S.sim}" ดูได้อย่างเดียว · กด "กลับเป็นผู้ดูแลระบบ" เพื่อบันทึกหรือแก้ไข`);

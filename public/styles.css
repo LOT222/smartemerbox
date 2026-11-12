@@ -1053,3 +1053,10 @@ html.dark .iss-item { background: rgba(255,255,255,.06); }
 .dp-time select.input { height: 44px; font-size: 17px; font-weight: 600; text-align: center; }
 .dp-sum { text-align: center; margin-top: 10px; font-weight: 650; font-size: 15px; color: #3b5bdb; font-variant-numeric: tabular-nums; }
 .dp-foot .btn.primary { color: #fff; }
+/* ตัวอย่างการ์ด LINE */
+.flex-stage { background: #8fa7c9; background: linear-gradient(180deg, #9db3d3, #8aa2c6); border-radius: 14px; padding: 18px 14px; }
+.fx-msg { display: flex; gap: 10px; align-items: flex-start; justify-content: center; }
+.fx-av { width: 38px; height: 38px; border-radius: 50%; background: #d62839; color: #fff; display: grid; place-items: center; flex: none; }
+.fx-av .ti { width: 20px; height: 20px; background-color: #fff; }
+.fx-bubble { width: min(330px, 100%); background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.12); font-family: system-ui, -apple-system, "Helvetica Neue", sans-serif; color: #111; }
+.flex-stage .faint { color: #f1f5fb; }

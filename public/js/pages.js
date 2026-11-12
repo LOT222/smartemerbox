@@ -449,6 +449,42 @@
     try { const r = await api("apiRegenerateQr", S.token, id); S.data = r.data; toast("สร้าง QR ใหม่แล้ว"); App.render(); } catch (e) { fail(e); }
   };
 
+  // ---------- ตัวอย่าง LINE Flex (แปลง JSON ของการ์ดจริงเป็น HTML) ----------
+  const FX_SIZE = { xxs: 11, xs: 12.5, sm: 14, md: 16, lg: 18, xl: 21, xxl: 26, "3xl": 30 };
+  const FX_GAP = { none: 0, xs: 2, sm: 4, md: 8, lg: 12, xl: 16, xxl: 20 };
+  const fxPad = (n) => { const v = String(n || ""); return v.endsWith("px") ? v : ""; };
+  function fxNode(n, parentLayout) {
+    if (!n) return "";
+    const m = n.margin != null ? `margin-${parentLayout === "horizontal" ? "left" : "top"}:${FX_GAP[n.margin] ?? 0}px;` : "";
+    const fl = parentLayout === "horizontal" ? `flex:${n.flex ?? 1} 1 0;min-width:0;` : "";
+    if (n.type === "text") {
+      return `<div style="${m}${fl}font-size:${FX_SIZE[n.size] || 14}px;color:${n.color || "#111"};font-weight:${n.weight === "bold" ? 700 : 400};text-align:${n.align === "end" ? "right" : n.align === "center" ? "center" : "left"};${n.wrap ? "white-space:normal;" : "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"}line-height:1.4">${esc(n.text)}</div>`;
+    }
+    if (n.type === "separator") return `<div style="${m}border-top:1px solid ${n.color || "#e5e5e5"}"></div>`;
+    if (n.type === "button") return `<div style="${m}${fl}background:${n.color || "#111"};color:#fff;border-radius:8px;text-align:center;padding:${n.height === "sm" ? 9 : 12}px;font-size:15px;font-weight:600">${esc(n.action?.label || "")}</div>`;
+    if (n.type === "box") {
+      const hz = n.layout === "horizontal";
+      const gap = FX_GAP[n.spacing] ?? 0;
+      const st = `${m}${fl}display:flex;flex-direction:${hz ? "row" : "column"};${hz ? "align-items:" + (n.contents?.some((c) => c.type === "box") ? "flex-start" : "baseline") + ";" : ""}gap:${gap}px;${n.backgroundColor ? "background:" + n.backgroundColor + ";" : ""}${n.paddingAll ? "padding:" + fxPad(n.paddingAll) + ";" : ""}${n.paddingBottom ? "padding-bottom:" + fxPad(n.paddingBottom) + ";" : ""}${n.cornerRadius ? "border-radius:" + n.cornerRadius + ";" : ""}${n.width ? "width:" + n.width + ";flex:none;" : ""}${n.height ? "height:" + n.height + ";" : ""}${n.offsetTop ? "position:relative;top:" + n.offsetTop + ";" : ""}`;
+      return `<div style="${st}">${(n.contents || []).map((c) => fxNode(c, n.layout)).join("")}</div>`;
+    }
+    return "";
+  }
+  function flexHtml(msg) {
+    const b = msg?.contents; if (!b) return "";
+    const sep = b.styles?.footer?.separator ? `border-top:1px solid ${b.styles.footer.separatorColor || "#e5e5e5"};` : "";
+    return `<div class="fx-msg"><div class="fx-av">${ic("first-aid-kit")}</div><div class="fx-bubble">${b.header ? fxNode(b.header, "vertical") : ""}${b.body ? fxNode(b.body, "vertical") : ""}${b.footer ? `<div style="${sep}">${fxNode(b.footer, "vertical")}</div>` : ""}</div></div>
+      <div class="xs faint mt-8" style="text-align:center">ข้อความแจ้งเตือนบนหน้าจอล็อก: “${esc(msg.altText || "")}”</div>`;
+  }
+  App.flexLoad = async () => {
+    try { App._flex = await api("apiFlexPreview", S.token); App.flexShow("open"); }
+    catch (e) { const el = $("#flexStage"); if (el) el.innerHTML = `<div class="small muted">ยังแสดงตัวอย่างไม่ได้ — Backend ยังเป็นเวอร์ชันเก่า (ต้อง deploy Edge Function v2.13.0 ก่อน)</div>`; }
+  };
+  App.flexShow = (k) => {
+    $$("#flexSeg button").forEach((b) => b.classList.toggle("on", b.dataset.k === k));
+    const el = $("#flexStage"); if (el && App._flex) el.innerHTML = flexHtml(App._flex[k]);
+  };
+
   // ---------- items editor ----------
   // ข้อมูลยังเก็บแยกแถวละ 1 lot (แต่ละ lot มีวันหมดอายุของตัวเอง ใช้แจ้งเตือน 30/15/7 วัน)
   // แต่หน้าจอรวมเป็น "ยา 1 รายการ + lot ย่อย" — ชื่อ/ความแรง/หน่วย/ควรมี กรอกครั้งเดียวที่แถวแรก
@@ -1091,6 +1127,10 @@
         ${field("LINE To ID (โหมด push)", `<textarea class="input" data-s="LINE_TO_ID" placeholder="หนึ่งรายการต่อบรรทัด">${esc(s.LINE_TO_ID || "")}</textarea>`, "", "full")}</div>
         <div class="alert warn mt-16" style="padding:10px 14px"><div class="grow small">LINE OA แพ็กเกจฟรีมีโควตาจำกัดต่อเดือน และนับตาม<b>จำนวนผู้รับ</b> ถ้าโควตาหมด ข้อความเปิดกล่องจะส่งไม่สำเร็จ และเหตุการณ์นั้นจะไม่มี notification_sent_at</div><div id="lineQuota" class="small nowrap"><button class="btn sm" onclick="App.lineQuota()">ตรวจโควตา</button></div></div>
         <div class="row wrap mt-16" style="justify-content:flex-end"><button class="btn" onclick="App.testNotify()">${ic("send")} ทดสอบส่ง LINE + Push</button><button class="btn" onclick="App.sendExpiry()">${ic("calendar-exclamation")} ส่งสรุปยาใกล้หมดอายุตอนนี้</button><button class="btn primary" id="setBtn" onclick="App.saveSettings()">บันทึก</button></div></div>`;
+      body += `<div class="card card-pad mt-16"><div class="row between wrap gap-12"><div><h3>ตัวอย่างการ์ด LINE</h3><div class="muted small mt-4">หน้าตาจริงที่ส่งเข้า LINE OA (สร้างจากเซิร์ฟเวอร์ด้วยข้อมูลตัวอย่าง · ไม่แสดง HN ตามโครงร่างวิจัย)</div></div>
+        <div class="seg" id="flexSeg">${[["open", "เปิดกล่อง"], ["escalate", "ยังไม่มีผู้รับทราบ"], ["expiry", "ยาใกล้หมดอายุ"], ["test", "ทดสอบ"]].map(([k, l], i) => `<button type="button" class="${i ? "" : "on"}" data-k="${k}" onclick="App.flexShow('${k}')">${l}</button>`).join("")}</div></div>
+        <div class="flex-stage mt-16" id="flexStage"><div class="xs faint">กำลังโหลดตัวอย่าง…</div></div></div>`;
+      setTimeout(() => App.flexLoad(), 0);
     } else if (t === "pdpa") {
       const T = window.SEB_TEXT;
       body = `<div class="card card-pad"><h3>ประกาศความเป็นส่วนตัว (PDPA)</h3><div class="muted small mt-4">ผู้ใช้ทุกคนต้องอ่านและกดรับทราบก่อนเริ่มใช้งาน เมื่อเปลี่ยนเลขเวอร์ชัน ผู้ใช้ทุกคนจะต้องรับทราบใหม่อีกครั้ง</div>
