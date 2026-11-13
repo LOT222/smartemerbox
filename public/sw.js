@@ -1,5 +1,5 @@
 /* SEB v2 service worker — app shell cache + Web Push */
-const VERSION = "seb-v2.14.0-1";
+const VERSION = "seb-v2.14.0-2";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./config.js", "./manifest.webmanifest",
   "./vendor/qrcode.js", "./vendor/fonts.css", "./vendor/icons.css", "./js/consent-text.js", "./js/core.js", "./js/consent.js", "./js/app.js", "./js/pages.js", "./js/print.js", "./js/stats.js", "./js/research.js", "./js/public.js",

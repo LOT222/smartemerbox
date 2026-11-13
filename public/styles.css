@@ -1091,3 +1091,13 @@ html.dark .iss-item { background: rgba(255,255,255,.06); }
 .pl-l { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-e, .pl-n { text-align: right; } .pl-n { color: var(--text); font-weight: 600; }
 .pl-e.e-near { color: #b45309; font-weight: 700; } .pl-e.e-exp { color: #b91c1c; font-weight: 700; }
+/* v2.14 — เติมยา: ไฮไลต์ยาที่ใช้ไปในเคส */
+.iss-used { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+.im-row[data-used] { border-color: #93c5fd; box-shadow: inset 4px 0 0 #3b82f6; background: #f5f9ff; }
+.im-row[data-used][data-issue="exp"] { box-shadow: inset 4px 0 0 #dc2626; }
+#itemsTable tbody[data-used]:not([data-issue="exp"]):not([data-issue="near"]) td { background: #f5f9ff !important; }
+#itemsTable tbody[data-used]:not([data-issue="exp"]):not([data-issue="near"]) tr td:first-child { box-shadow: inset 5px 0 0 #3b82f6; }
+.used-pick summary { cursor: pointer; padding: 12px 14px; list-style: none; }
+.used-pick summary::-webkit-details-marker { display: none; }
+.used-pick > div { border-top: 1px solid var(--border); }
+html.dark .im-row[data-used], html.dark #itemsTable tbody[data-used] td { background: rgba(59,130,246,.12) !important; }

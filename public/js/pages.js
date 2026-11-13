@@ -234,14 +234,30 @@
     if (!box) return fail(new Error("ไม่พบกล่องยา"));
     const needUsed = !(e.itemsUsedJson || []).length;
     const drugs = uniqueDrugs(box.items);
+    // ยาที่ใช้ไปในเคสนี้ (ถ้ามีบันทึก) → ไฮไลต์และขึ้นก่อน · ถ้าไม่มีบันทึก แสดงทุกรายการตามปกติ
+    const usedMap = {};
+    (e.itemsUsedJson || []).forEach((u) => { const k = drugKey(u); usedMap[k] = (usedMap[k] || 0) + Number(u.qty || 0); });
+    const nUsed = Object.keys(usedMap).length;
+    const usedTxt = nUsed ? `ใช้ไป ${nUsed} รายการ แสดงไว้ด้านบน` : "ไม่มีบันทึกยาที่ใช้ · แสดงทุกรายการ";
     drawer(`เติมยา · ${esc(box.boxCode)}`, `
       <div class="alert info mb-16" style="padding:10px 12px"><div class="small">ปรับ lot / วันหมดอายุ / จำนวน ให้ตรงกับยาที่เติมจริง ระบบจะบันทึกการเคลื่อนไหวของยาให้อัตโนมัติ เมื่อกดยืนยัน เวลานี้จะเป็น <b>ready_at</b></div></div>
-      ${needUsed ? `<h3 class="mb-8">ยาที่ใช้ไปในเคสนี้ <span class="xs faint">(ถ้าทราบ)</span></h3><div class="card mb-16">${drugs.map((d, i) => `<div class="list-row"><div class="grow">${esc(d.drugName)} <span class="muted">${esc(d.strength)}</span></div><input class="input sm" style="width:84px" type="number" min="0" inputmode="numeric" placeholder="0" data-used="${i}"></div>`).join("")}</div>` : ""}
-      <h3 class="mb-8">รายการยาในกล่องหลังเติม</h3>
-      ${itemsEditor(box.items)}
+      ${needUsed ? `<details class="card mb-16 used-pick"><summary><b>ระบุยาที่ใช้ไปในเคสนี้</b> <span class="xs faint">(ถ้าทราบ · ยาที่ระบุจะถูกไฮไลต์ด้านล่าง)</span></summary><div>${drugs.map((d, i) => `<div class="list-row"><div class="grow">${esc(d.drugName)} <span class="muted">${esc(d.strength)}</span></div><input class="input sm" style="width:84px" type="number" min="0" inputmode="numeric" placeholder="0" data-used="${i}" oninput="App.refillUsed()"></div>`).join("")}</div></details>` : ""}
+      <div class="row between wrap gap-8 mb-8"><h3>รายการยาในกล่อง</h3><span class="xs faint">${usedTxt}</span></div>
+      ${itemsEditor(box.items, usedMap)}
       ${sealOn() ? `<div class="form-grid mt-16">${field("เลขซีลใหม่", `<input class="input" id="rfSeal" value="${esc(box.sealNo || "")}" placeholder="เช่น 004513">`)}</div>` : ""}`,
       `<button class="btn ghost" onclick="App.closeDrawer()">ยกเลิก</button><button class="btn primary" id="rfBtn" onclick="App.confirmReady('${eventId}')">${ic("circle-check")} ยืนยันกล่องพร้อมใช้</button>`, { wide: true });
     App._refillDrugs = drugs;
+    App.itemsM();
+  };
+  // พิมพ์จำนวนที่ใช้ → ไฮไลต์ยานั้นในรายการทันที
+  App.refillUsed = () => {
+    const m = {};
+    $$("input[data-used]").forEach((inp) => { const d = App._refillDrugs?.[+inp.dataset.used]; const n = Number(inp.value || 0); if (d && n > 0) m[drugKey(d)] = n; });
+    $$("#itemsTable tbody[data-drug]").forEach((tb) => {
+      const k = drugKey({ drugName: tb.querySelector('[data-g="drugName"]').value, strength: tb.querySelector('[data-g="strength"]').value });
+      if (m[k]) tb.dataset.used = m[k]; else delete tb.dataset.used;
+    });
+    App.itemsM();
   };
   App.confirmReady = withBusy("#rfBtn", async (eventId) => {
     const items = collectItems();
@@ -250,7 +266,7 @@
       const ok = await dialog({ title: "ยังมีรายการไม่ครบ", body: `${bad.drugName}: ยังไม่ระบุวันหมดอายุหรือจำนวนเป็น 0\nยืนยันพร้อมใช้ต่อหรือไม่?`, confirm: "ยืนยันต่อ" });
       if (!ok) return;
     }
-    const used = $$("[data-used]").map((el) => ({ ...App._refillDrugs[+el.dataset.used], qty: Number(el.value || 0) })).filter((x) => x.qty > 0);
+    const used = $$("input[data-used]").map((el) => ({ ...App._refillDrugs[+el.dataset.used], qty: Number(el.value || 0) })).filter((x) => x.qty > 0);
     const res = await api("apiConfirmReady", S.token, { eventId, items, itemsUsed: used, sealNo: sealOn() ? val("rfSeal") : (D().boxes.find((x) => x.id === D().events.find((e) => e.id === eventId)?.boxId)?.sealNo || "") });
     S.data = res.data;
     closeDrawer();
@@ -520,6 +536,7 @@
   }
   const ISS_ICON = { exp: "alert-circle", near: "alert-triangle", short: "alert-triangle", over: "alert-triangle" };
   const issBadges = (iss) => iss.list.map((x) => `<span class="iss-badge iss-${x.k}">${ic(ISS_ICON[x.k])} ${x.t}</span>`).join("");
+  const usedBadge = (n) => `<span class="iss-badge iss-used">${ic("refresh")} ใช้ไป ${n} · ตรวจ/เติม</span>`;
   const domLots = (tb) => [...tb.querySelectorAll("tr[data-lot]")].map((tr) => ({ lot: tr.querySelector('[data-f="lot"]').value.trim(), exp: tr.querySelector('[data-f="expiryDate"]').value, qty: Number(tr.querySelector('[data-f="qty"]').value || 0) }));
   // อัปเดตสี/ป้ายของแถวยาในตาราง + กล่องสรุปด้านบน (เรียกเมื่อโหลด และทุกครั้งที่แก้จำนวน/วันที่)
   App.itemFlags = () => {
@@ -529,10 +546,11 @@
       const g = (f) => (tb.querySelector(`[data-g="${f}"]`)?.value || "").trim();
       const iss = drugIssue(domLots(tb), Number(g("requiredQty") || 0));
       tb.dataset.issue = iss.lv;
+      const used = Number(tb.dataset.used || 0);
       const slot = tb.querySelector(".iss-slot");
-      if (slot) slot.innerHTML = issBadges(iss);
+      if (slot) slot.innerHTML = (used ? usedBadge(used) : "") + issBadges(iss);
       const sr = tb.querySelector("tr.lot-sum");
-      if (sr) sr.hidden = tb.querySelectorAll("tr[data-lot]").length < 2 && !iss.lv;
+      if (sr) sr.hidden = tb.querySelectorAll("tr[data-lot]").length < 2 && !iss.lv && !used;
       tb.querySelectorAll("tr[data-lot]").forEach((tr) => {
         const d = daysUntil(tr.querySelector('[data-f="expiryDate"]').value);
         tr.dataset.lotst = d < 0 ? "exp" : d <= nearDays() ? "near" : "";
@@ -561,9 +579,11 @@
     x.tb.classList.add("iss-flash"); setTimeout(() => x.tb.classList.remove("iss-flash"), 1400);
   };
 
-  function itemsEditor(items) {
+  function itemsEditor(items, used) {
+    let groups = groupDrugs(items);
+    if (used && Object.keys(used).length) groups = [...groups.filter((g) => used[drugKey(g[0])]), ...groups.filter((g) => !used[drugKey(g[0])])];
     return `<div id="issBox"></div><div class="items-m" id="itemsM"></div><div class="table-wrap items-desk"><table class="t compact itbl" id="itemsTable"><thead><tr><th>ชื่อยา</th><th>ความแรง</th><th>Lot</th><th>วันหมดอายุ</th><th>จำนวน</th><th>ควรมี</th><th>หน่วย</th><th></th></tr></thead>
-      ${groupDrugs(items).map(drugGroup).join("")}</table></div>
+      ${groups.map((g) => drugGroup(g, used ? used[drugKey(g[0])] : 0)).join("")}</table></div>
       <div class="row mt-12 wrap"><button class="btn sm" onclick="App.addItemRow()">${ic("plus")} เพิ่มยา</button><span class="xs faint items-desk">ยาเดียวกันหลาย lot ให้กด ${ic("plus")} lot ที่แถวของยานั้น</span><span class="xs faint items-mhint">แตะที่ยาเพื่อแก้ไข / เพิ่ม lot</span></div>`;
   }
   function lotCells(it) {
@@ -578,10 +598,10 @@
     return `<tr data-lot class="lot-sub"><td colspan="2" data-a="tag"><span class="lot-tag">${ic("corner-down-right")} lot เพิ่ม</span></td>${lotCells(it)}<td class="m-hide"></td><td class="m-hide"></td>
       <td class="nowrap" data-a="act"><span class="btn sm icon" style="visibility:hidden"></span><button class="btn ghost sm icon" title="ลบ lot นี้" onclick="App.delLot(this)">${ic("x")}</button></td></tr>`;
   }
-  function drugGroup(lots = [{}]) {
+  function drugGroup(lots = [{}], usedQty = 0) {
     const h = lots[0] || {};
     const req = Math.max(0, ...lots.map((x) => Number(x.requiredQty || 0)));
-    return `<tbody data-drug>
+    return `<tbody data-drug${usedQty ? ` data-used="${usedQty}"` : ""}>
       <tr data-lot class="lot-head"><td data-a="name" data-l="ชื่อยา"><input class="input sm${drugKnown(h.drugName) ? "" : " warn-in"}" data-g="drugName" list="drugList" autocomplete="off" onchange="SEB.drugPicked(this)" value="${esc(h.drugName || "")}"></td>
         <td data-a="str" data-l="ความแรง"><input class="input sm" data-g="strength" value="${esc(h.strength || "")}"></td>
         ${lotCells(h)}
@@ -647,10 +667,11 @@
       const iss = drugIssue(lots, req), tot = iss.tot;
       const nd2 = nearDays();
       const qcls = iss.list.some((x) => x.k === "short") ? "q-short" : iss.list.some((x) => x.k === "over") ? "q-over" : "";
-      return `<button type="button" class="im-row" data-issue="${iss.lv}" onclick="App.editDrug(${i})">
+      const used = Number(tb.dataset.used || 0);
+      return `<button type="button" class="im-row" data-issue="${iss.lv}"${used ? ` data-used="1"` : ""} onclick="App.editDrug(${i})">
         <div class="im-top"><div class="im-name"><b>${esc(g("drugName") || "(ยังไม่ระบุชื่อ)")}</b> <span class="muted">${esc(g("strength"))}</span></div>
           <div class="im-q ${qcls}"><b>${tot}</b>${req ? `<span>/${req}</span>` : ""} <small>${esc(g("unit"))}</small></div>${ic("chevron-right")}</div>
-        ${iss.list.length ? `<div class="im-iss">${issBadges(iss)}</div>` : ""}
+        ${iss.list.length || used ? `<div class="im-iss">${used ? usedBadge(used) : ""}${issBadges(iss)}</div>` : ""}
         <div class="im-lots">${lots.map((x) => { const d = daysUntil(x.exp); const c = !x.exp ? "" : d < 0 ? "e-exp" : d <= nd2 ? "e-near" : ""; return `<div class="im-lot"><span class="im-l">${esc(x.lot || "–")}</span><span class="im-e ${c}">${x.exp ? fmtDLong(x.exp) : "–"}</span><span class="im-n">${x.qty}</span></div>`; }).join("")}</div>
       </button>`;
     }).join("") : empty("ยังไม่มีรายการยา", "pill-off");
