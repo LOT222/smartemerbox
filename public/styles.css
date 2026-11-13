@@ -874,9 +874,11 @@ body.sheet-open { overflow: hidden; }
 @keyframes sbFade { from { opacity: 0; } to { opacity: 1; } }
 .sheet-tbl, .sheet-tbl tbody { display: block; width: 100%; }
 .sheet-tbl tr { display: grid; gap: 8px; }
-.sheet-tbl tr.lot-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .8fr); grid-template-areas: "name name name" "str unit req" "lot lot qty" "exp exp exp"; }
-.sheet-tbl tr.lot-head td[data-a="act"] { display: none !important; }
-.sheet-tbl tr.lot-sub { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .8fr); grid-template-areas: "tag tag act" "lot lot qty" "exp exp exp"; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.sheet-tbl tr.lot-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .8fr) auto; grid-template-areas: "name name name name" "str unit req req" "lot lot qty act" "exp exp exp exp"; }
+.sheet-tbl tr.lot-head td[data-a="act"] { align-self: end; }
+.sheet-tbl tr.lot-head [title="เพิ่ม lot ของยานี้"] { display: none; }   /* มีปุ่ม "เพิ่ม lot ของยานี้" ด้านล่างแล้ว */
+.sheet-tbl tbody:not(:has(tr.lot-sub)) tr.lot-head td[data-a="act"] { display: none; }   /* lot เดียว: ลบยาที่ปุ่ม "ลบยานี้" */
+.sheet-tbl tr.lot-sub { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, .8fr) auto; grid-template-areas: "tag tag tag act" "lot lot qty qty" "exp exp exp exp"; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
 .sheet-tbl tr.lot-sum { grid-template-columns: 1fr auto auto; grid-template-areas: "sl st sm"; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); align-items: center; }
 .sheet-tbl tr.lot-sum[hidden] { display: none; }
 .sheet-tbl td { display: block; padding: 0 !important; border: 0 !important; background: transparent !important; min-width: 0; }
@@ -1109,3 +1111,4 @@ html.dark .im-row[data-used], html.dark #itemsTable tbody[data-used] td { backgr
   .subnav { margin-left: -16px; margin-right: -16px; padding: 0 12px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
   .subnav button { padding: 12px 12px; font-size: 14.5px; }
 }
+.sheet-tbl tbody:not(:has(tr.lot-sub)) tr.lot-head { grid-template-areas: "name name name name" "str unit req req" "lot lot qty qty" "exp exp exp exp"; }

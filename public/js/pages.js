@@ -560,6 +560,7 @@
     renderIssueBox(issues);
   };
   function renderIssueBox(issues) {
+    App._issues = issues;                       // อัปเดตทุกครั้ง แม้ไม่มีประเด็นแล้ว (กันกล่องยืนยันใช้ข้อมูลค้าง)
     const el = $("#issBox"); if (!el) return;
     if (!issues.length) { el.innerHTML = `<div class="iss-ok">${ic("circle-check")} ยาทุกรายการครบและยังไม่ใกล้หมดอายุ</div>`; return; }
     const rank = { exp: 0, near: 1, short: 2, over: 3 };
