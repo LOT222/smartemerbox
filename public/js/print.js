@@ -86,7 +86,7 @@
           return `<div class="in"><div class="top"><span class="c">${esc(b.boxCode)}</span><span class="t">${esc(c.title || "")}</span></div>
             ${c.showLoc ? `<div class="l">${esc(b.location || "")}</div>` : ""}
             <div><div class="k">ตรวจครั้งถัดไป</div><div class="d">${date ? thDate(date) : "____/____/______"}</div></div>
-            <div class="m">${c.showLast ? `<span>ตรวจล่าสุด ${b.lastInspectedAt ? thDate(b.lastInspectedAt) : "-"}</span>` : "<span></span>"}${c.showSeal ? `<span>ซีล ${esc(b.sealNo || "-")}</span>` : ""}</div>
+            <div class="m">${c.showLast ? `<span>ตรวจล่าสุด ${b.lastInspectedAt ? thDate(b.lastInspectedAt) : "-"}</span>` : "<span></span>"}${c.showSeal && SEB.sealOn() ? `<span>ซีล ${esc(b.sealNo || "-")}</span>` : ""}</div>
             ${c.showHosp ? `<div class="o">${esc(hosp)} · ห้องยา</div>` : ""}</div>`;
         },
       };
@@ -266,7 +266,7 @@
       h += ST.kind === "qr"
         ? `<div class="col gap-4">${tog("showLoc", "แสดงจุดวางกล่อง", c.showLoc)}${tog("showHint", "แสดงคำแนะนำการสแกน", c.showHint)}${tog("showHosp", "แสดงชื่อโรงพยาบาล", c.showHosp)}</div>`
         : `<label class="field"><span>วันนัดตรวจ <span class="hint">เว้นว่าง = ใช้วันนัดของแต่ละกล่อง</span></span><input class="input sm" type="date" data-c="overrideDate" value="${esc(c.overrideDate || "")}" oninput="App.printSet(this)"></label>
-          <div class="col gap-4">${tog("showLoc", "แสดงจุดวางกล่อง", c.showLoc)}${tog("showLast", "แสดงวันตรวจล่าสุด", c.showLast)}${tog("showSeal", "แสดงเลขซีล", c.showSeal)}${tog("showHosp", "แสดงชื่อโรงพยาบาล", c.showHosp)}</div>`;
+          <div class="col gap-4">${tog("showLoc", "แสดงจุดวางกล่อง", c.showLoc)}${tog("showLast", "แสดงวันตรวจล่าสุด", c.showLast)}${SEB.sealOn() ? tog("showSeal", "แสดงเลขซีล", c.showSeal) : ""}${tog("showHosp", "แสดงชื่อโรงพยาบาล", c.showHosp)}</div>`;
       h += `<div><div class="row between mb-8"><span class="label">กล่องที่จะพิมพ์</span><span class="row gap-4"><button class="btn ghost sm" onclick="App.printPick(true)">ทั้งหมด</button><button class="btn ghost sm" onclick="App.printPick(false)">ล้าง</button></span></div>
           <div class="card" style="max-height:220px;overflow:auto">${D().boxes.map((b) => `<label class="list-row check small" style="padding:7px 12px"><input type="checkbox" data-pick="${b.id}" ${ST.ids.includes(b.id) ? "checked" : ""} onchange="App.printPickOne()"> <span class="grow">${esc(b.boxCode)} <span class="faint">${esc(b.location)}</span></span>${ST.kind === "appt" ? `<span class="xs faint">${b.inspectionDate ? fmtD(b.inspectionDate) : "ยังไม่นัด"}</span>` : ""}</label>`).join("")}</div></div>`;
     }

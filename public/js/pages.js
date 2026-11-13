@@ -5,7 +5,7 @@
   const X = window.SEB;
   const { S, api, esc, ic, $, $$, val, fmtD, fmtT, fmtDT, ago, minutes, fmtMin, localInput, daysUntil, initials, download, toCsv,
     ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, toast, fail, dialog, drawer, closeDrawer,
-    kpi, empty, field, opt, setTitle, dateSel, fmtDLong } = X;
+    kpi, empty, field, opt, setTitle, dateSel, fmtDLong, sealOn } = X;
   const App = window.App;
 
   const D = () => S.data;
@@ -239,7 +239,7 @@
       ${needUsed ? `<h3 class="mb-8">ยาที่ใช้ไปในเคสนี้ <span class="xs faint">(ถ้าทราบ)</span></h3><div class="card mb-16">${drugs.map((d, i) => `<div class="list-row"><div class="grow">${esc(d.drugName)} <span class="muted">${esc(d.strength)}</span></div><input class="input sm" style="width:84px" type="number" min="0" inputmode="numeric" placeholder="0" data-used="${i}"></div>`).join("")}</div>` : ""}
       <h3 class="mb-8">รายการยาในกล่องหลังเติม</h3>
       ${itemsEditor(box.items)}
-      <div class="form-grid mt-16">${field("เลขซีลใหม่", `<input class="input" id="rfSeal" value="${esc(box.sealNo || "")}" placeholder="เช่น 004513">`)}</div>`,
+      ${sealOn() ? `<div class="form-grid mt-16">${field("เลขซีลใหม่", `<input class="input" id="rfSeal" value="${esc(box.sealNo || "")}" placeholder="เช่น 004513">`)}</div>` : ""}`,
       `<button class="btn ghost" onclick="App.closeDrawer()">ยกเลิก</button><button class="btn primary" id="rfBtn" onclick="App.confirmReady('${eventId}')">${ic("circle-check")} ยืนยันกล่องพร้อมใช้</button>`, { wide: true });
     App._refillDrugs = drugs;
   };
@@ -251,7 +251,7 @@
       if (!ok) return;
     }
     const used = $$("[data-used]").map((el) => ({ ...App._refillDrugs[+el.dataset.used], qty: Number(el.value || 0) })).filter((x) => x.qty > 0);
-    const res = await api("apiConfirmReady", S.token, { eventId, items, itemsUsed: used, sealNo: val("rfSeal") });
+    const res = await api("apiConfirmReady", S.token, { eventId, items, itemsUsed: used, sealNo: sealOn() ? val("rfSeal") : (D().boxes.find((x) => x.id === D().events.find((e) => e.id === eventId)?.boxId)?.sealNo || "") });
     S.data = res.data;
     closeDrawer();
     X.renderNav();
@@ -360,13 +360,13 @@
             <div class="row between"><span class="muted">ตรวจล่าสุด</span><span>${fmtD(b.lastInspectedAt)}</span></div>
             <div class="row between mt-8"><span class="muted">ตรวจครั้งถัดไป</span><span style="${b.inspectionOverdue ? "color:var(--warn-text);font-weight:600" : ""}">${b.inspectionDate ? fmtD(b.inspectionDate) : "ยังไม่นัด"}</span></div>
             <div class="row between mt-8"><span class="muted">พร้อมใช้ล่าสุด</span><span>${fmtDT(b.lastReadyAt)}</span></div>
-            <div class="row between mt-8"><span class="muted">เลขซีล</span><span class="mono">${esc(b.sealNo || "–")}</span></div>
+            ${sealOn() ? `<div class="row between mt-8"><span class="muted">เลขซีล</span><span class="mono">${esc(b.sealNo || "–")}</span></div>` : ""}
           </div>
           ${isStaff() ? `<div class="card card-pad"><h3 class="mb-12">ข้อมูลกล่อง</h3><div class="form-grid">
             ${field("รหัสกล่อง", `<input class="input" id="bxCode" value="${esc(b.boxCode)}">`)}
             ${field("จุดวางกล่อง", `<select class="input" id="bxLoc">${opt([["", "ยังไม่กำหนด"], ...activeLocs().map((l) => [l.id, l.name])], b.locationId)}</select>`)}
             ${field("ชุดยามาตรฐาน", `<select class="input" id="bxKit">${opt([["", "ไม่ผูก"], ...D().kits.map((k) => [k.id, k.name])], b.kitId)}</select>`)}
-            ${field("เลขซีล", `<input class="input" id="bxSeal" value="${esc(b.sealNo || "")}">`)}
+            ${sealOn() ? field("เลขซีล", `<input class="input" id="bxSeal" value="${esc(b.sealNo || "")}">`) : ""}
             ${field("หมายเหตุ", `<input class="input" id="bxNote" value="${esc(b.note || "")}">`, "", "full")}</div>
             <div class="row mt-16" style="justify-content:flex-end">${isAdmin() ? `<button class="btn danger-ghost" onclick="App.deleteBox('${b.id}')">${ic("trash")} ลบกล่อง</button>` : ""}<span class="grow"></span><button class="btn primary" id="bxBtn" onclick="App.saveBox('${b.id}')">บันทึกการเปลี่ยนแปลง</button></div></div>` : ""}
         </div>
@@ -435,7 +435,7 @@
     }
     if (!reason) return;
     const kit = D().kits.find((k) => k.id === val("bxKit"));
-    const r = await api("apiSaveBox", S.token, { id, boxCode: val("bxCode"), locationId: val("bxLoc"), kitId: val("bxKit"), kitName: kit?.name || "", sealNo: val("bxSeal"), note: val("bxNote"), items: collectItems(), changeReason: reason });
+    const r = await api("apiSaveBox", S.token, { id, boxCode: val("bxCode"), locationId: val("bxLoc"), kitId: val("bxKit"), kitName: kit?.name || "", sealNo: sealOn() ? val("bxSeal") : (D().boxes.find((x) => x.id === id)?.sealNo || ""), note: val("bxNote"), items: collectItems(), changeReason: reason });
     S.data = r.data;
     toast("บันทึกแล้ว");
     App.render();
@@ -825,7 +825,7 @@
           <td data-a="exp" data-l="วันหมดอายุ">${dateSel('data-f="expiryDate"', it.expiryDate, "App.insAuto(this)")}</td>
           <td data-a="st" data-l="สถานะ"><select class="input sm" data-f="status" onchange="this.dataset.manual=1;App.insSummary()">${opt([["normal", "ปกติ"], ["near", "ใกล้หมด"], ["expired", "หมดอายุ"], ["missing", "ขาด"]], autoStatus(it))}</select></td></tr>`).join("")}</tbody></table></div></div>
       <div class="card card-pad mt-16"><div class="form-grid">
-        ${field("เลขซีล", `<input class="input" id="insSeal" value="${esc(b.sealNo || "")}">`)}
+        ${sealOn() ? field("เลขซีล", `<input class="input" id="insSeal" value="${esc(b.sealNo || "")}">`) : ""}
         ${field("ปัญหาที่พบ (ถ้ามี)", `<input class="input" id="insNote" placeholder="แตะปุ่มด้านล่าง หรือพิมพ์เอง">`)}
         <div class="full"><div class="chips">${optList("OPT_INSPECT_PROBLEMS").map((p, i) => `<button type="button" class="chip" data-ip="${i}" onclick="App.insProblem(${i})">${esc(p)}</button>`).join("")}</div></div>
         <label class="check full"><input type="checkbox" id="insApply" checked> ปรับรายการยาในกล่องตามผลตรวจนี้ (lot / วันหมดอายุ / จำนวน)</label></div>
@@ -864,7 +864,7 @@
       const g = (f) => tr.querySelector(`[data-f="${f}"]`).value.trim();
       return { drugName: tr.dataset.drug, strength: tr.dataset.strength, form: tr.dataset.form, unit: src.unit || "", requiredQty: Number(tr.dataset.req || 0), actualQty: g("actualQty"), lot: g("lot"), expiryDate: g("expiryDate"), status: g("status") };
     });
-    const r = await api("apiSaveInspection", S.token, { boxId, items, sealNo: val("insSeal"), problemNote: val("insNote"), startedAt: S.inspectStart, finishedAt: new Date().toISOString(), applyToBox: $("#insApply").checked });
+    const r = await api("apiSaveInspection", S.token, { boxId, items, sealNo: sealOn() ? val("insSeal") : (D().boxes.find((x) => x.id === boxId)?.sealNo || ""), problemNote: val("insNote"), startedAt: S.inspectStart, finishedAt: new Date().toISOString(), applyToBox: $("#insApply").checked });
     S.data = r.data;
     S.inspections = null;
     clearInterval(App._insT);
@@ -1121,7 +1121,7 @@
         <div class="row mt-16" style="justify-content:flex-end"><button class="btn primary" id="pwBtn" onclick="App.changePw()">เปลี่ยนรหัสผ่าน</button></div></div>`;
     } else if (t === "general") {
       body = `<div class="card card-pad"><h3>ข้อมูลหน่วยงาน</h3><div class="form-grid mt-16">${sf("HOSPITAL_NAME", "ชื่อโรงพยาบาล")}${sf("DEPARTMENT_NAME", "ชื่อหน่วยงาน")}${sf("APP_CREDIT_TEXT", "ผู้พัฒนาระบบ")}${sf("PHARMACY_PHONE", "เบอร์โทรห้องยา", "tel", "แสดงในหน้าสแกน QR เมื่อส่งแจ้งเตือนไม่ได้ (เช่น ไม่มีอินเทอร์เน็ต)")}</div></div>
-        <div class="card card-pad mt-16"><h3>เกณฑ์การทำงาน</h3><div class="form-grid mt-16">${sf("NEAR_EXPIRY_DAYS", "ใกล้หมดอายุ (วัน)", "number")}${sf("INSPECTION_INTERVAL_DAYS", "รอบตรวจกล่อง (วัน)", "number")}${sf("RESPONSE_TARGET_MIN", "เป้าหมายตอบสนอง (นาที)", "number")}${sf("ESCALATE_AFTER_MIN", "แจ้งซ้ำถ้าไม่มีผู้รับทราบ (นาที)", "number")}${sf("PUBLIC_OPEN_COOLDOWN_SEC", "กันสแกนซ้ำ (วินาที)", "number")}${sf("DEFAULT_PASSWORD", "รหัสผ่านเริ่มต้น")}${field("สมัครสมาชิกเอง", `<select class="input" data-s="ALLOW_SIGNUP">${opt([["1", "เปิด (รอผู้ดูแลอนุมัติ)"], ["0", "ปิด"]], s.ALLOW_SIGNUP ?? "1")}</select>`)}</div>
+        <div class="card card-pad mt-16"><h3>เกณฑ์การทำงาน</h3><div class="form-grid mt-16">${field("ระบบเลขซีล", `<select class="input" data-s="SEAL_ENABLED">${opt([["0", "ปิด · ซ่อนช่องเลขซีลทุกหน้า (ยังไม่มีซีลใช้)"], ["1", "เปิด · บันทึก/แสดงเลขซีลกล่อง"]], s.SEAL_ENABLED ?? "0")}</select>`, "เปิดเมื่อเริ่มใช้ซีลล็อกกล่องที่มีเลขกำกับ · ข้อมูลเลขซีลเดิมยังเก็บไว้")}${sf("NEAR_EXPIRY_DAYS", "ใกล้หมดอายุ (วัน)", "number")}${sf("INSPECTION_INTERVAL_DAYS", "รอบตรวจกล่อง (วัน)", "number")}${sf("RESPONSE_TARGET_MIN", "เป้าหมายตอบสนอง (นาที)", "number")}${sf("ESCALATE_AFTER_MIN", "แจ้งซ้ำถ้าไม่มีผู้รับทราบ (นาที)", "number")}${sf("PUBLIC_OPEN_COOLDOWN_SEC", "กันสแกนซ้ำ (วินาที)", "number")}${sf("DEFAULT_PASSWORD", "รหัสผ่านเริ่มต้น")}${field("สมัครสมาชิกเอง", `<select class="input" data-s="ALLOW_SIGNUP">${opt([["1", "เปิด (รอผู้ดูแลอนุมัติ)"], ["0", "ปิด"]], s.ALLOW_SIGNUP ?? "1")}</select>`)}</div>
         <div class="row mt-16" style="justify-content:flex-end"><button class="btn primary" id="setBtn" onclick="App.saveSettings()">บันทึก</button></div></div>`;
     } else if (t === "options") {
       body = `<div class="card card-pad"><h3>รายการตัวเลือก</h3><div class="muted small mt-4">ข้อความที่ผู้ใช้เลือกแทนการพิมพ์ เพิ่ม ลบ แก้ หรือสลับลำดับได้เอง การแก้ไขไม่กระทบข้อมูลที่บันทึกไปแล้ว</div></div>${optionsTab()}`;

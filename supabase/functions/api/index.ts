@@ -7,8 +7,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.13.0";
-const SCHEMA_REQUIRED = 5; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
+const APP_VERSION = "2.14.0";
+const SCHEMA_REQUIRED = 6; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -626,7 +626,7 @@ async function apiPublicGetBox(_c: Ctx, boxId: string, qrToken: string) {
   return {
     box: {
       id: d.id, boxCode: d.boxCode, kitName: d.kitName, location: d.location, locationZone: d.locationZone,
-      state: d.state, status: d.status, sealNo: d.sealNo || "",
+      state: d.state, status: d.status, sealNo: String(settings.SEAL_ENABLED || "0") === "1" ? d.sealNo || "" : "",
       items: items.map((it: any) => {
         const dl = daysUntil(it.expiryDate, today);
         return {
@@ -1658,8 +1658,6 @@ function buildOpenFlex(event: any, box: any, settings: any, escalation: boolean)
           irow("📅", "วันที่", fmtDateNum(at), { margin: "lg" }),
           irow("⏰", "เวลาเปิดใช้", `${fmtTime(at)} น.`),
           irow("🩺", "เหตุผล", event.reasonCategory || "-"),
-          irow("👤", "ผู้เปิด", event.openerName || "-"),
-          irow("🔖", "รหัสเหตุการณ์", event.eventCode || "-"),
         ],
       },
       footer: footer(settings),

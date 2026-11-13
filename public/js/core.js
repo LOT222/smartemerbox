@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.13.0";
+  const APP_VERSION = "2.14.0";
 
   const S = {
     demo: DEMO,
@@ -471,9 +471,12 @@
   function fmtDLong(v) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || "")); return m ? `${m[3]}/${m[2]}/${+m[1] + 543}` : ""; }
 
 
+  // ระบบเลขซีล: ค่าเริ่มต้นปิด (ยังไม่มีซีลใช้จริง) — admin เปิดได้ที่ ตั้งค่า → ทั่วไป
+  const sealOn = () => String(S.data?.settings?.SEAL_ENABLED ?? "0") === "1";
+
   // ---------------- export ----------------
   window.SEB = {
-    S, api, DEMO, IDLE_MS, Q, dateSel, dateSync, fmtDLong, fmtCE, datePick, dpMove, dpSet, dpClose, dtSel, dpTime, dpNow, dpOk, fmtBEdt,
+    S, api, DEMO, IDLE_MS, Q, dateSel, dateSync, fmtDLong, sealOn, fmtCE, datePick, dpMove, dpSet, dpClose, dtSel, dpTime, dpNow, dpOk, fmtBEdt,
     APP_VERSION, getTheme, setTheme, esc, ic, $, $$, val, fmtD, fmtT, fmtDT, ago, minutes, fmtMin, localInput, todayStr, daysUntil, initials, sum, uid, download, toCsv,
     BOX_STATE, CASE_STATE, ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, LOGO_B, HOSP_LOGO, hospLogoAbs, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, isRealAdmin, withSim, LOGO,
     toast, fail, dialog, drawer, closeDrawer, kpi, empty, field, opt, renderShell, renderNav, setTitle, TITLES,
