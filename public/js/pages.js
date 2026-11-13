@@ -354,7 +354,7 @@
           <div class="card card-pad center">
             <div style="width:168px;margin:0 auto" class="qr">${qrSvg}</div>
             <div class="xs faint mt-8">QR สำหรับหน้างาน · สแกนแล้วบันทึกการเปิดได้ทันที</div>
-            <div class="row mt-12" style="justify-content:center"><button class="btn sm" onclick="App.printQr(['${b.id}'])">${ic("printer")} พิมพ์ฉลาก</button><button class="btn sm" onclick="navigator.clipboard.writeText('${esc(b.qrUrl)}').then(()=>SEB.toast('คัดลอกลิงก์แล้ว'))">${ic("copy")} ลิงก์</button>${isAdmin() ? `<button class="btn sm ghost" title="สร้าง QR ใหม่ (ฉลากเดิมจะใช้ไม่ได้)" onclick="App.regenQr('${b.id}')">${ic("refresh")}</button>` : ""}</div>
+            <div class="row mt-12" style="justify-content:center"><button class="btn sm" onclick="App.printQr(['${b.id}'])">${ic("printer")} พิมพ์ฉลาก</button><button class="btn sm" title="เปิดหน้าที่พยาบาลเห็นหลังสแกน บนเว็บที่ใช้อยู่ตอนนี้" onclick="App.tryQr('${b.id}')">${ic("qrcode")} ทดลองสแกน</button><button class="btn sm" onclick="navigator.clipboard.writeText('${esc(b.qrUrl)}').then(()=>SEB.toast('คัดลอกลิงก์แล้ว'))">${ic("copy")} ลิงก์</button>${isAdmin() ? `<button class="btn sm ghost" title="สร้าง QR ใหม่ (ฉลากเดิมจะใช้ไม่ได้)" onclick="App.regenQr('${b.id}')">${ic("refresh")}</button>` : ""}</div>
           </div>
           <div class="card card-pad small">
             <div class="row between"><span class="muted">ตรวจล่าสุด</span><span>${fmtD(b.lastInspectedAt)}</span></div>
@@ -483,6 +483,15 @@
   App.flexShow = (k) => {
     $$("#flexSeg button").forEach((b) => b.classList.toggle("on", b.dataset.k === k));
     const el = $("#flexStage"); if (el && App._flex) el.innerHTML = flexHtml(App._flex[k]);
+  };
+
+  // เปิดหน้า QR บน "เว็บที่กำลังใช้อยู่" (ไม่ใช้ qrUrl ซึ่งชี้ไป PUBLIC_SITE_URL) — ทดลองบนเว็บซ้อมได้โดยไม่ไปบันทึกในระบบจริง
+  App.tryQr = (id) => {
+    const b = D().boxes.find((x) => x.id === id); if (!b) return;
+    let t = "";
+    try { t = new URL(b.qrUrl).searchParams.get("t") || ""; } catch (_) {}
+    if (!t) return toast("ไม่พบรหัส QR ของกล่องนี้");
+    window.open(`${location.origin}${location.pathname}?page=open&boxId=${encodeURIComponent(id)}&t=${encodeURIComponent(t)}`, "_blank");
   };
 
   // ---------- items editor ----------
