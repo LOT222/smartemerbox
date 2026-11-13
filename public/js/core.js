@@ -474,6 +474,18 @@
   // ระบบเลขซีล: ค่าเริ่มต้นปิด (ยังไม่มีซีลใช้จริง) — admin เปิดได้ที่ ตั้งค่า → ทั่วไป
   const sealOn = () => String(S.data?.settings?.SEAL_ENABLED ?? "0") === "1";
 
+  // ความสูงหัวหน้า (topbar) → ให้แถบเมนูย่อย (.subnav) ตรึงใต้หัวพอดี และเลื่อนแท็บที่เลือกให้อยู่ในจอ
+  (function watchTopbar() {
+    const set = () => { const t = document.querySelector(".topbar"); if (t) document.documentElement.style.setProperty("--topbar-h", t.getBoundingClientRect().height + "px"); };
+    try { new ResizeObserver(set).observe(document.documentElement); } catch (_) {}
+    new MutationObserver(() => {
+      set();
+      const on = document.querySelector(".subnav button.on");
+      if (on && !on.dataset.seen) { on.dataset.seen = "1"; on.scrollIntoView({ block: "nearest", inline: "center" }); }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+    window.addEventListener("resize", set);
+  })();
+
   // ---------------- export ----------------
   window.SEB = {
     S, api, DEMO, IDLE_MS, Q, dateSel, dateSync, fmtDLong, sealOn, fmtCE, datePick, dpMove, dpSet, dpClose, dtSel, dpTime, dpNow, dpOk, fmtBEdt,

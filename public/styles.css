@@ -1101,3 +1101,11 @@ html.dark .iss-item { background: rgba(255,255,255,.06); }
 .used-pick summary::-webkit-details-marker { display: none; }
 .used-pick > div { border-top: 1px solid var(--border); }
 html.dark .im-row[data-used], html.dark #itemsTable tbody[data-used] td { background: rgba(59,130,246,.12) !important; }
+/* v2.14 — แถบเมนูย่อยตรึงใต้หัวหน้า · เลื่อนได้เฉพาะซ้าย-ขวา */
+.subnav { position: sticky; top: var(--topbar-h, 60px); z-index: 15; background: var(--bg); margin-left: -4px; margin-right: -4px; padding: 0 4px;
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x pan-y; -webkit-overflow-scrolling: touch; }
+.subnav::-webkit-scrollbar { display: none; }
+@media (max-width: 760px) {
+  .subnav { margin-left: -16px; margin-right: -16px; padding: 0 12px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+  .subnav button { padding: 12px 12px; font-size: 14.5px; }
+}
