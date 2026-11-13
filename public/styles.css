@@ -1060,3 +1060,34 @@ html.dark .iss-item { background: rgba(255,255,255,.06); }
 .fx-av .ti { width: 20px; height: 20px; background-color: #fff; }
 .fx-bubble { width: min(330px, 100%); background: #fff; border-radius: 18px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.12); font-family: system-ui, -apple-system, "Helvetica Neue", sans-serif; color: #111; }
 .flex-stage .faint { color: #f1f5fb; }
+
+/* v2.14 — หน้า QR: เลือก เปิดกล่อง / ดูรายการยา */
+.pub-choice { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; font: inherit; color: var(--text); background: var(--surface); border: 1.5px solid var(--border); border-radius: 18px; padding: 18px 16px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.pub-choice:active { transform: scale(.99); }
+.pub-choice b { display: block; font-size: 18px; font-weight: 700; }
+.pub-choice small { display: block; font-size: 13.5px; color: var(--text-2); margin-top: 2px; }
+.pub-choice > .ti:last-child { opacity: .4; flex: none; }
+.pub-choice .pc-ic { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; flex: none; background: #eef2ff; }
+.pub-choice .pc-ic .ti { width: 28px; height: 28px; background-color: #4f46e5; }
+.pub-choice.open { background: #d62839; border-color: #d62839; color: #fff; box-shadow: 0 6px 18px rgba(214, 40, 57, .28); }
+.pub-choice.open small { color: rgba(255,255,255,.88); }
+.pub-choice.open .pc-ic { background: rgba(255,255,255,.18); }
+.pub-choice.open .pc-ic .ti, .pub-choice.open > .ti:last-child { background-color: #fff; opacity: 1; }
+.pc-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.pc-badges .iss-badge { margin: 0; }
+
+.pl-head, .pl-lot { display: grid; grid-template-columns: minmax(0, 1fr) 118px 48px; column-gap: 10px; align-items: center; }
+.pl-head { padding: 0 14px 6px; font-size: 11.5px; color: var(--text-3, #8a8796); }
+.pl-head span:nth-child(n+2) { text-align: right; }
+.pl-list { display: flex; flex-direction: column; gap: 8px; }
+.pl-drug { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface); }
+.pl-drug[data-issue="exp"] { box-shadow: inset 4px 0 0 #dc2626; border-color: #fca5a5; }
+.pl-drug[data-issue="near"] { box-shadow: inset 4px 0 0 #f59e0b; border-color: #fcd34d; }
+.pl-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: baseline; }
+.pl-name { line-height: 1.35; } .pl-name b { font-weight: 650; }
+.pl-q { white-space: nowrap; font-variant-numeric: tabular-nums; } .pl-q b { font-weight: 650; } .pl-q small { color: var(--text-3, #8a8796); }
+.pl-lots { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; }
+.pl-lot { font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pl-l { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-e, .pl-n { text-align: right; } .pl-n { color: var(--text); font-weight: 600; }
+.pl-e.e-near { color: #b45309; font-weight: 700; } .pl-e.e-exp { color: #b91c1c; font-weight: 700; }
