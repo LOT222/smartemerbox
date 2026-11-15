@@ -1221,3 +1221,6 @@ html.dark .sys-banner.lv-warn { background: rgba(217,119,6,.16); color: #fef3c7;
 .np-sw input:checked + span::after { transform: translateX(18px); }
 .np-sw input:focus-visible + span { outline: 2px solid #3b82f6; outline-offset: 2px; }
 @media (max-width: 760px) { .np-head span:not(.grow), .np-sw { width: 62px; } }
+.np-sw.locked { opacity: .55; cursor: not-allowed; }
+#rmBody .np-head span:not(.grow), #rmBody .np-sw { width: 80px; }
+#rmSeg { flex-wrap: wrap; }

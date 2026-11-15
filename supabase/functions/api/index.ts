@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.18.1";
+const APP_VERSION = "2.19.0";
 const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -1613,8 +1613,37 @@ function normPrefs(p: any) {
   const pick = (a: any, allowTest: boolean) => (Array.isArray(a) ? a.map(String).filter((k) => NOTICE_KINDS.includes(k) && (allowTest || k !== "test")) : []);
   return { hide: pick(p?.hide, true), mute: pick(p?.mute, false) };   // ทดสอบ: ซ่อนในระบบได้ แต่ Push ส่งถึงเสมอ
 }
-const hiddenKinds = (user: any) => normPrefs(user?.notifyPrefs).hide;
-function filterHidden(q: any, user: any) { const h = hiddenKinds(user); return h.length ? q.not("kind", "in", `(${h.join(",")})`) : q; }
+// ---------- สิทธิ์การแจ้งเตือนตามบทบาท (admin กำหนด) ----------
+// settings.NOTIFY_ROLE_PREFS = { role: { kind: { i: 0|1 (ในระบบ), p: 0|1 (Push), l: 0|1 (บังคับ · ผู้ใช้ปิดเองไม่ได้) } } }
+// settings.NOTIFY_USER_OVERRIDE = "1" ให้ผู้ใช้ปิดเรื่องที่ไม่บังคับเองได้ (ค่าเริ่มต้น) · "0" = ใช้ตามบทบาทเท่านั้น
+// ค่าเริ่มต้น = เหมือนเดิมทุกอย่าง (ทุกบทบาทได้ทุกเรื่อง ยกเว้น คำขอบัญชี/ทดสอบ เฉพาะ admin)
+function roleNoticeDefault(role: string, kind: string) {
+  if (kind === "account" || kind === "test") return role === "admin" ? { i: 1, p: 1, l: 0 } : { i: 0, p: 0, l: 0 };
+  return { i: 1, p: 1, l: 0 };
+}
+function roleNoticeRule(settings: any, role: string, kind: string) {
+  let m: any = {};
+  try { m = JSON.parse(String(settings?.NOTIFY_ROLE_PREFS || "{}")) || {}; } catch (_) { m = {}; }
+  const r = m?.[role]?.[kind];
+  const d = roleNoticeDefault(role, kind);
+  return r ? { i: r.i ? 1 : 0, p: kind === "test" ? d.p : r.p ? 1 : 0, l: r.l ? 1 : 0 } : d;
+}
+// สิ่งที่ผู้ใช้คนนี้ได้รับจริง = ตามบทบาท แล้วหักที่ผู้ใช้ปิดเอง (เฉพาะเรื่องที่ไม่บังคับ และ admin อนุญาตให้ปรับเอง)
+function effectivePrefs(user: any, settings: any) {
+  const own = normPrefs(user?.notifyPrefs);
+  const allowOwn = String(settings?.NOTIFY_USER_OVERRIDE ?? "1") !== "0";
+  const hide: string[] = [], mute: string[] = [];
+  for (const k of NOTICE_KINDS) {
+    const r = roleNoticeRule(settings, user?.role || "", k);
+    const canOwn = allowOwn && !r.l;
+    if (!r.i || (canOwn && own.hide.includes(k))) hide.push(k);
+    if (k === "test") continue;                              // Push ทดสอบส่งเสมอ
+    if (!r.p || (canOwn && own.mute.includes(k))) mute.push(k);
+  }
+  return { hide, mute };
+}
+async function hiddenKindsFor(user: any) { try { return effectivePrefs(user, await settingsObject()).hide; } catch (_) { return normPrefs(user?.notifyPrefs).hide; } }
+function filterHidden(q: any, hide: string[]) { return hide.length ? q.not("kind", "in", `(${hide.join(",")})`) : q; }
 async function apiSaveNotifyPrefs(_c: Ctx, token: string, prefs: any) {
   const user = await requireAuth(token);
   const clean = normPrefs(prefs);
@@ -1630,9 +1659,11 @@ async function apiSaveNotifyPrefs(_c: Ctx, token: string, prefs: any) {
 async function mutedUserIds(kind: string) {
   if (!kind || kind === "test") return new Set<string>();
   try {
-    const { data, error } = await db.from("users").select("id,notifyPrefs");
+    const settings = await settingsObject();
+    let { data, error } = await db.from("users").select("id,role,notifyPrefs");
+    if (error) ({ data, error } = await db.from("users").select("id,role"));   // ยังไม่ได้รัน migration notifyPrefs
     if (error) return new Set<string>();
-    return new Set((data || []).filter((u: any) => normPrefs(u.notifyPrefs).mute.includes(kind)).map((u: any) => u.id));
+    return new Set((data || []).filter((u: any) => effectivePrefs(u, settings).mute.includes(kind)).map((u: any) => u.id));
   } catch (_) { return new Set<string>(); }
 }
 
@@ -1640,7 +1671,7 @@ function noticeAudience(user: any) { return user?.role === "admin" ? ["all", "ad
 async function unreadNoticeCount(user: any) {
   try {
     const since = new Date(Date.now() - 30 * 86400000).toISOString();
-    const { data: rows, error } = await filterHidden(db.from("notifications").select("id").in("audience", noticeAudience(user)), user)
+    const { data: rows, error } = await filterHidden(db.from("notifications").select("id").in("audience", noticeAudience(user)), await hiddenKindsFor(user))
       .gte("createdAt", since).order("createdAt", { ascending: false }).limit(200);
     if (error) throw error;
     const ids = (rows || []).map((r: any) => r.id);
@@ -1654,7 +1685,7 @@ async function unreadNoticeCount(user: any) {
 async function apiListNotifications(_c: Ctx, token: string, opts: any = {}) {
   const user = await requireAuth(token);
   const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
-  let q = filterHidden(db.from("notifications").select("*").in("audience", noticeAudience(user)), user).order("createdAt", { ascending: false }).limit(limit);
+  let q = filterHidden(db.from("notifications").select("*").in("audience", noticeAudience(user)), await hiddenKindsFor(user)).order("createdAt", { ascending: false }).limit(limit);
   if (opts.before) q = q.lt("createdAt", opts.before);
   const { data, error } = await q;
   if (error) {
@@ -1680,7 +1711,7 @@ async function apiMarkNotificationsRead(_c: Ctx, token: string, ids: any) {
   const user = await requireAuth(token);
   let list: string[] = [];
   if (ids === "all") {
-    const { data } = await filterHidden(db.from("notifications").select("id").in("audience", noticeAudience(user)), user).order("createdAt", { ascending: false }).limit(500);
+    const { data } = await filterHidden(db.from("notifications").select("id").in("audience", noticeAudience(user)), await hiddenKindsFor(user)).order("createdAt", { ascending: false }).limit(500);
     list = (data || []).map((r: any) => r.id);
   } else {
     list = (Array.isArray(ids) ? ids : [ids]).map(String).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 500);

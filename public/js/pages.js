@@ -536,18 +536,67 @@
     ["account", "คำขอบัญชี / ลืมรหัสผ่าน", "admin"],
     ["test", "ทดสอบการแจ้งเตือน", "admin"],
   ];
+  // กฎตามบทบาท (ตรงกับ backend roleNoticeRule)
+  const ROLE_KEYS = ["admin", "pharmacist", "technician", "nurse", "viewer"];
+  const adminOnlyKind = (k) => k === "account" || k === "test";
+  function roleRuleDefault(role, k) { return adminOnlyKind(k) ? (role === "admin" ? { i: 1, p: 1, l: 0 } : { i: 0, p: 0, l: 0 }) : { i: 1, p: 1, l: 0 }; }
+  function roleMatrix() { try { return JSON.parse(D().settings.NOTIFY_ROLE_PREFS || "{}") || {}; } catch (_) { return {}; } }
+  function roleRule(m, role, k) { const r = m?.[role]?.[k]; const d = roleRuleDefault(role, k); return r ? { i: r.i ? 1 : 0, p: k === "test" ? d.p : r.p ? 1 : 0, l: r.l ? 1 : 0 } : d; }
+  const userOverride = () => String(D().settings.NOTIFY_USER_OVERRIDE ?? "1") !== "0";
+
   function prefsCard() {
     const p = S.user?.notifyPrefs || { hide: [], mute: [] };
-    const rows = PREF_KINDS.filter(([, , t]) => t !== "admin" || S.user?.role === "admin").map(([k, l, hint]) => {
+    const m = roleMatrix(), role = S.user?.role || "", own = userOverride();
+    const kinds = PREF_KINDS.filter(([k]) => { const r = roleRule(m, role, k); return r.i || r.p; });
+    const rows = kinds.map(([k, l, hint]) => {
       const kd = App.NOTICE_KIND?.[k] || {};
-      const sw = (list, title) => `<label class="np-sw" title="${title}"><input type="checkbox" data-np="${list}" data-k="${k}" ${p[list].includes(k) ? "" : "checked"} onchange="App.prefDirty()"><span></span></label>`;
-      return `<div class="np-row"><span class="np-ic" style="--c:${kd.c || "#64748b"}">${ic(kd.icon || "bell")}</span><div class="grow"><div class="small" style="font-weight:600">${l}</div>${hint && hint !== "admin" ? `<div class="xs faint">${hint}</div>` : ""}</div>${sw("hide", "แสดงในกล่องแจ้งเตือน")}${k === "test" ? `<span class="np-sw xs faint" title="ปุ่มทดสอบส่ง Push ถึงเสมอ เพื่อใช้เช็กว่าเครื่องรับได้">ส่งเสมอ</span>` : sw("mute", "เด้งบนเครื่อง (Push)")}</div>`;
+      const r = roleRule(m, role, k);
+      const locked = !own || r.l;
+      const sw = (list, allowed, title) => !allowed ? `<span class="np-sw xs faint">ไม่ได้รับ</span>`
+        : `<label class="np-sw${locked ? " locked" : ""}" title="${locked ? "ผู้ดูแลระบบกำหนด" : title}"><input type="checkbox" data-np="${list}" data-k="${k}" ${!locked && p[list].includes(k) ? "" : "checked"} ${locked ? "disabled" : ""} onchange="App.prefDirty()"><span></span></label>`;
+      const pushCell = k === "test" ? `<span class="np-sw xs faint" title="ปุ่มทดสอบส่ง Push ถึงเสมอ">ส่งเสมอ</span>` : sw("mute", r.p, "เด้งบนเครื่อง (Push)");
+      return `<div class="np-row"><span class="np-ic" style="--c:${kd.c || "#64748b"}">${ic(kd.icon || "bell")}</span><div class="grow"><div class="small" style="font-weight:600">${l}${r.l ? ` <span class="pill plain xs">${ic("lock")} บังคับ</span>` : ""}</div>${hint && hint !== "admin" ? `<div class="xs faint">${hint}</div>` : ""}</div>${sw("hide", r.i, "แสดงในกล่องแจ้งเตือน")}${pushCell}</div>`;
     }).join("");
-    return `<div class="card card-pad mt-16"><div class="row between wrap gap-12"><div><h3>เลือกเรื่องที่ต้องการรับแจ้ง</h3><div class="muted small mt-4">ตั้งเฉพาะบัญชีของคุณ ใช้กับทุกเครื่องที่ล็อกอินบัญชีนี้ · ไม่กระทบคนอื่น และไม่กระทบกลุ่ม LINE</div></div></div>
-      <div class="np-head mt-16"><span class="grow"></span><span>ในระบบ</span><span>เด้งบนเครื่อง</span></div>
-      <div class="np-list">${rows}</div>
-      <div class="row mt-12" style="justify-content:space-between;align-items:center"><span class="xs faint">"ในระบบ" = แสดงในกล่องแจ้งเตือน/นับตัวเลขกระดิ่ง · "เด้งบนเครื่อง" = Push บนมือถือ/คอม · ปุ่มทดสอบส่งถึงเสมอ</span><button class="btn primary" id="npSave" onclick="App.savePrefs()" disabled>บันทึก</button></div></div>`;
+    return `<div class="card card-pad mt-16"><div class="row between wrap gap-12"><div><h3>เลือกเรื่องที่ต้องการรับแจ้ง</h3><div class="muted small mt-4">${own ? "ปิดได้เฉพาะเรื่องที่ไม่บังคับ · ใช้กับทุกเครื่องที่ล็อกอินบัญชีนี้ · ไม่กระทบกลุ่ม LINE" : "ผู้ดูแลระบบกำหนดการแจ้งเตือนตามบทบาทไว้ · ผู้ใช้ปรับเองไม่ได้"}</div></div>${SEB.isRealAdmin() ? `<button class="btn ghost sm" onclick="App.go('settings','notify')">${ic("users")} กำหนดตามบทบาท</button>` : ""}</div>
+      ${rows ? `<div class="np-head mt-16"><span class="grow"></span><span>ในระบบ</span><span>เด้งบนเครื่อง</span></div><div class="np-list">${rows}</div>` : `<div class="small muted mt-12">บทบาทของคุณไม่ได้รับการแจ้งเตือนจากระบบ</div>`}
+      ${own && rows ? `<div class="row mt-12" style="justify-content:space-between;align-items:center"><span class="xs faint">"ในระบบ" = แสดงในกล่องแจ้งเตือน/นับตัวเลขกระดิ่ง · "เด้งบนเครื่อง" = Push บนมือถือ/คอม</span><button class="btn primary" id="npSave" onclick="App.savePrefs()" disabled>บันทึก</button></div>` : ""}</div>`;
   }
+
+  // ---------- admin: กำหนดการแจ้งเตือนตามบทบาท ----------
+  function roleMatrixCard() {
+    const m = roleMatrix();
+    App._rm = JSON.parse(JSON.stringify(m));
+    App._rmRole = App._rmRole || "pharmacist";
+    return `<div class="card card-pad mt-16"><div class="row between wrap gap-8"><div><h3>การแจ้งเตือนตามบทบาท</h3><div class="muted small mt-4">กำหนดว่าแต่ละบทบาทได้รับแจ้งเรื่องไหน · "บังคับ" = ผู้ใช้ปิดเองไม่ได้ · ใช้กับกล่องแจ้งเตือนและ Push (ไม่กระทบกลุ่ม LINE)</div></div></div>
+      <div class="seg mt-16" id="rmSeg">${ROLE_KEYS.map((r) => `<button type="button" data-r="${r}" class="${r === App._rmRole ? "on" : ""}" onclick="App.rmRole('${r}')">${esc(SEB.ROLE?.[r] || r)}</button>`).join("")}</div>
+      <div id="rmBody" class="mt-12"></div>
+      <input type="hidden" data-s="NOTIFY_ROLE_PREFS" value="${esc(JSON.stringify(m))}">
+      <div class="form-grid mt-16">${field("ให้ผู้ใช้ปรับเองได้", `<select class="input" data-s="NOTIFY_USER_OVERRIDE">${opt([["1", "ได้ · ปิดเรื่องที่ไม่บังคับเองได้"], ["0", "ไม่ได้ · ใช้ตามที่ผู้ดูแลระบบกำหนดเท่านั้น"]], D().settings.NOTIFY_USER_OVERRIDE ?? "1")}</select>`)}</div>
+      <div class="row mt-16" style="justify-content:flex-end"><button class="btn ghost" onclick="App.rmReset()">คืนค่าเริ่มต้นของบทบาทนี้</button><button class="btn primary" onclick="App.saveSettings()">บันทึก</button></div></div>`;
+  }
+  function rmRender() {
+    const el = $("#rmBody"); if (!el) return;
+    const role = App._rmRole;
+    const rows = PREF_KINDS.map(([k, l]) => {
+      const kd = App.NOTICE_KIND?.[k] || {};
+      if (adminOnlyKind(k) && role !== "admin") return `<div class="np-row"><span class="np-ic" style="--c:${kd.c || "#64748b"}">${ic(kd.icon || "bell")}</span><div class="grow small" style="font-weight:600">${l}</div><span class="xs faint" style="width:240px;text-align:center">เฉพาะผู้ดูแลระบบ</span></div>`;
+      const r = roleRule(App._rm, role, k);
+      const cb = (f, dis) => `<label class="np-sw${dis ? " locked" : ""}"><input type="checkbox" ${r[f] ? "checked" : ""} ${dis ? "disabled" : ""} onchange="App.rmSet('${k}','${f}',this.checked)"><span></span></label>`;
+      return `<div class="np-row"><span class="np-ic" style="--c:${kd.c || "#64748b"}">${ic(kd.icon || "bell")}</span><div class="grow small" style="font-weight:600">${l}</div>${cb("i")}${k === "test" ? `<span class="np-sw xs faint">ส่งเสมอ</span>` : cb("p")}${cb("l", !r.i && !r.p)}</div>`;
+    }).join("");
+    el.innerHTML = `<div class="np-head"><span class="grow"></span><span>ในระบบ</span><span>เด้งบนเครื่อง</span><span>บังคับ</span></div><div class="np-list">${rows}</div>`;
+  }
+  App.rmRole = (r) => { App._rmRole = r; $$("#rmSeg button").forEach((b) => b.classList.toggle("on", b.dataset.r === r)); rmRender(); };
+  App.rmSet = (k, f, v) => {
+    const role = App._rmRole;
+    const cur = roleRule(App._rm, role, k);
+    cur[f] = v ? 1 : 0;
+    if (!cur.i && !cur.p) cur.l = 0;
+    App._rm[role] = { ...(App._rm[role] || {}), [k]: cur };
+    const h = document.querySelector('[data-s="NOTIFY_ROLE_PREFS"]'); if (h) h.value = JSON.stringify(App._rm);
+    rmRender();
+  };
+  App.rmReset = () => { delete App._rm[App._rmRole]; const h = document.querySelector('[data-s="NOTIFY_ROLE_PREFS"]'); if (h) h.value = JSON.stringify(App._rm); rmRender(); };
   App.prefDirty = () => {
     const b = $("#npSave"); if (b) b.disabled = false;
     const caseOff = $$('[data-np][data-k="case"]').some((x) => !x.checked);
@@ -555,7 +604,7 @@
   };
   App.savePrefs = async () => {
     const prefs = { hide: [], mute: [] };
-    $$("[data-np]").forEach((x) => { if (!x.checked) prefs[x.dataset.np].push(x.dataset.k); });
+    $$("[data-np]").forEach((x) => { if (!x.disabled && !x.checked) prefs[x.dataset.np].push(x.dataset.k); });
     try {
       const r = await api("apiSaveNotifyPrefs", S.token, prefs);
       S.user.notifyPrefs = r.notifyPrefs;
@@ -1234,6 +1283,7 @@
           <li>Admin หน่วยบริการเข้า CMS MOPH Notify → <b>กลุ่มบอท</b> → จัดการ → <b>อนุมัติ</b> กลุ่มนั้น</li>
           <li>กดรูปตาที่ช่อง API Key ของกลุ่ม แล้วคัดลอก Client_ID / Secret มาวางที่นี่ → บันทึก → กด "ทดสอบส่ง"</li></ol></details>
         <div class="row wrap mt-16" style="justify-content:flex-end"><span class="xs faint grow">ปุ่มทดสอบนี้ส่งเข้ากลุ่มหมอพร้อมอย่างเดียว · ไม่ใช้โควตา LINE OA</span><div id="mophResult" class="full" style="width:100%;order:9"></div><button class="btn" onclick="App.testNotify('moph')">${ic("send")} ทดสอบส่งเข้ากลุ่ม</button><button class="btn primary" onclick="App.saveSettings()">บันทึก</button></div></div>
+        ${roleMatrixCard()}
         <div class="card card-pad mt-16"><h3>LINE Messaging API</h3><div class="muted small mt-4">ช่องทางหลักที่ใช้นับ notification_sent_at ตามนิยาม 5.7.4 · ข้อความไม่แสดง HN</div><div class="form-grid mt-16">
         ${field("Channel access token", `<input class="input" data-s="LINE_CHANNEL_ACCESS_TOKEN" type="password" placeholder="${s.LINE_TOKEN_SET ? "ตั้งค่าแล้ว · เว้นว่างถ้าไม่เปลี่ยน" : "วาง token ที่นี่"}">`, s.LINE_TOKEN_SET ? "✓ ตั้งค่าแล้ว" : "")}
         ${field("การส่งทาง LINE OA", `<select class="input" data-s="LINE_OA_MODE">${opt([["fallback", "สำรอง · ส่งเฉพาะเมื่อหมอพร้อมส่งไม่สำเร็จ (แนะนำ)"], ["always", "ส่งทุกครั้ง (ใช้โควตาทุกข้อความ)"], ["off", "ปิด · ไม่ส่ง LINE OA"]], s.LINE_OA_MODE || (s.MOPH_ENABLED === "1" ? "fallback" : "always"))}</select>`, "ใช้กับ เปิดกล่อง · แจ้งซ้ำ · ยาใกล้หมดอายุ · สรุปรายวัน")}
@@ -1250,7 +1300,7 @@
         <div class="flex-stage mt-16" id="flexStage"><div class="xs faint">กำลังโหลดตัวอย่าง…</div></div>
         <div class="row wrap mt-12" style="justify-content:flex-end;align-items:center"><span class="xs faint grow">ส่งการ์ดที่เลือกอยู่ (ข้อมูลสมมติ) เข้ากลุ่มหมอพร้อม · ไม่ใช้โควตา LINE OA</span>
           <button class="btn" id="flexSendBtn" onclick="App.flexSend()">${ic("send")} ส่งการ์ด “<span id="flexSendName">เปิดกล่อง</span>” เข้ากลุ่ม</button><button class="btn ghost" onclick="App.flexSendAll()">ส่งครบทุกแบบ</button></div></div>`;
-      setTimeout(() => App.flexLoad(), 0);
+      setTimeout(() => { App.flexLoad(); rmRender(); }, 0);
     } else if (t === "pdpa") {
       const T = window.SEB_TEXT;
       body = `<div class="card card-pad"><h3>ประกาศความเป็นส่วนตัว (PDPA)</h3><div class="muted small mt-4">ผู้ใช้ทุกคนต้องอ่านและกดรับทราบก่อนเริ่มใช้งาน เมื่อเปลี่ยนเลขเวอร์ชัน ผู้ใช้ทุกคนจะต้องรับทราบใหม่อีกครั้ง</div>
