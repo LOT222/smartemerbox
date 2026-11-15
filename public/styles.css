@@ -1202,3 +1202,5 @@ html.dark .sys-banner.lv-warn { background: rgba(217,119,6,.16); color: #fef3c7;
   .nt-table th:nth-child(3), .nt-table td:nth-child(3), .nt-table th:nth-child(4), .nt-table td:nth-child(4) { display: none; }
   .nt-exp-sm { display: block; margin-top: 4px; }
 }
+.alert.ok { background: #ecfdf3; border-color: #bbf7d0; color: #14532d; }
+.alert.danger { background: #fef2f2; border-color: #fca5a5; color: #7f1d1d; }

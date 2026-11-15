@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.16.1";
+const APP_VERSION = "2.16.2";
 const SCHEMA_REQUIRED = 7; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -1735,12 +1735,23 @@ async function sendMoph(message: any, settings: any, kind: string) {
   if (!ck || !sk) return { ok: false, skipped: true, message: "ยังไม่ได้ตั้งค่า Client Key / Secret Key ของหมอพร้อม" };
   let url = String(settings.MOPH_URL || MOPH_URL_DEFAULT).trim();
   try { const u = new URL(url); if (u.protocol !== "https:" || !/(^|\.)moph\.go\.th$/.test(u.hostname)) url = MOPH_URL_DEFAULT; } catch { url = MOPH_URL_DEFAULT; }
-  try {
-    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "client-key": ck, "secret-key": sk }, body: JSON.stringify({ messages: [message] }) });
+  const post = async (msg: any) => {
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "client-key": ck, "secret-key": sk }, body: JSON.stringify({ messages: [msg] }) });
     const text = await res.text();
     let j: any = null; try { j = JSON.parse(text); } catch { /* ไม่ใช่ JSON */ }
     const ok = res.ok && Number(j?.message_code) === 200;
-    return { ok, at: ok ? nowIso() : "", status: res.status, message: ok ? "ส่งเข้ากลุ่ม LINE (หมอพร้อม) สำเร็จ" : `หมอพร้อม ${res.status}${j?.message_code ? `/${j.message_code}` : ""}: ${(j?.message || text || "").toString().slice(0, 200)}` };
+    return { ok, status: res.status, code: j?.message_code, detail: `HTTP ${res.status}${j?.message_code != null ? ` · message_code ${j.message_code}` : ""} · ${(j?.message || text || "(ไม่มีข้อความตอบกลับ)").toString().slice(0, 240)}` };
+  };
+  try {
+    const r1 = await post(message);
+    if (r1.ok) return { ok: true, at: nowIso(), status: r1.status, message: "ส่งเข้ากลุ่ม LINE (หมอพร้อม) สำเร็จ" };
+    // ส่งการ์ด (Flex) ไม่ผ่าน → ลองส่งเป็นข้อความธรรมดา เพื่อให้กลุ่มยังได้รับแจ้ง และแยกได้ว่าติดที่ key หรือรูปแบบการ์ด
+    if (message?.type === "flex") {
+      const r2 = await post({ type: "text", text: String(message.altText || "แจ้งเตือนจาก SEB").slice(0, 4900) });
+      if (r2.ok) return { ok: true, at: nowIso(), status: r2.status, textFallback: true, message: `ส่งเป็นข้อความธรรมดาสำเร็จ (การ์ดไม่ผ่าน: ${r1.detail})` };
+      return { ok: false, status: r2.status, message: `การ์ด: ${r1.detail} | ข้อความ: ${r2.detail}` };
+    }
+    return { ok: false, status: r1.status, message: r1.detail };
   } catch (e: any) {
     return { ok: false, message: `เชื่อมต่อหมอพร้อมไม่ได้: ${e?.message || e}` };
   }

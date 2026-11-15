@@ -1175,7 +1175,7 @@
           <li>สร้างกลุ่ม LINE และตั้งชื่อกลุ่มก่อน แล้วเชิญบัญชี LINE <b>หมอพร้อม</b> เข้ากลุ่ม</li>
           <li>Admin หน่วยบริการเข้า CMS MOPH Notify → <b>กลุ่มบอท</b> → จัดการ → <b>อนุมัติ</b> กลุ่มนั้น</li>
           <li>กดรูปตาที่ช่อง API Key ของกลุ่ม แล้วคัดลอก Client_ID / Secret มาวางที่นี่ → บันทึก → กด "ทดสอบส่ง"</li></ol></details>
-        <div class="row wrap mt-16" style="justify-content:flex-end"><span class="xs faint grow">ปุ่มทดสอบนี้ส่งเข้ากลุ่มหมอพร้อมอย่างเดียว · ไม่ใช้โควตา LINE OA</span><button class="btn" onclick="App.testNotify('moph')">${ic("send")} ทดสอบส่งเข้ากลุ่ม</button><button class="btn primary" onclick="App.saveSettings()">บันทึก</button></div></div>
+        <div class="row wrap mt-16" style="justify-content:flex-end"><span class="xs faint grow">ปุ่มทดสอบนี้ส่งเข้ากลุ่มหมอพร้อมอย่างเดียว · ไม่ใช้โควตา LINE OA</span><div id="mophResult" class="full" style="width:100%;order:9"></div><button class="btn" onclick="App.testNotify('moph')">${ic("send")} ทดสอบส่งเข้ากลุ่ม</button><button class="btn primary" onclick="App.saveSettings()">บันทึก</button></div></div>
         <div class="card card-pad mt-16"><h3>LINE Messaging API</h3><div class="muted small mt-4">ช่องทางหลักที่ใช้นับ notification_sent_at ตามนิยาม 5.7.4 · ข้อความไม่แสดง HN</div><div class="form-grid mt-16">
         ${field("Channel access token", `<input class="input" data-s="LINE_CHANNEL_ACCESS_TOKEN" type="password" placeholder="${s.LINE_TOKEN_SET ? "ตั้งค่าแล้ว · เว้นว่างถ้าไม่เปลี่ยน" : "วาง token ที่นี่"}">`, s.LINE_TOKEN_SET ? "✓ ตั้งค่าแล้ว" : "")}
         ${field("โหมดการส่ง", `<select class="input" data-s="LINE_SEND_MODE">${opt([["broadcast", "Broadcast (ทุกคนที่เพิ่มเพื่อน)"], ["push", "Push (ระบุกลุ่ม/ผู้ใช้)"]], s.LINE_SEND_MODE || "broadcast")}</select>`)}
@@ -1241,7 +1241,8 @@
       if (channel !== "line") parts.push(`หมอพร้อม: ${m.ok ? "สำเร็จ" : m.skipped ? m.message || "ไม่ได้เปิด" : "ไม่สำเร็จ"}`);
       if (channel !== "moph") parts.push(`Push: ${r.push.sent || 0} เครื่อง`);
       toast(parts.join(" · "), channel === "moph" ? !m.ok : !r.line.ok && !m.ok && !r.push.sent);
-      if (m.ok === false && !m.skipped) dialog({ title: "ส่งเข้ากลุ่มหมอพร้อมไม่สำเร็จ", body: `${esc(m.message || "")}\n\nตรวจว่า กลุ่มได้รับการอนุมัติใน CMS MOPH Notify แล้ว และ Client_ID / Secret ถูกต้อง`, confirm: "ตกลง", cancel: "" });
+      const box = $("#mophResult");
+      if (box && channel !== "line") box.innerHTML = m.skipped ? "" : `<div class="alert ${m.ok ? (m.textFallback ? "warn" : "ok") : "danger"} mt-8" style="padding:10px 12px"><div class="small" style="white-space:pre-wrap;word-break:break-word"><b>หมอพร้อม: ${m.ok ? "สำเร็จ" : "ไม่สำเร็จ"}</b> · ${esc(m.message || "ไม่มีรายละเอียด (backend อาจยังเป็นรุ่นเก่า)")}${m.ok ? "" : `\nตรวจ: เชิญบอท "หมอพร้อม" เข้ากลุ่มแล้ว · กลุ่มได้รับอนุมัติใน CMS MOPH Notify · Client_ID / Secret ถูกต้องและไม่มีช่องว่าง`}</div></div>`;
     } catch (e) { fail(e); }
   };
   App.lineQuota = async () => {
