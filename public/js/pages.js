@@ -1175,7 +1175,7 @@
           <li>สร้างกลุ่ม LINE และตั้งชื่อกลุ่มก่อน แล้วเชิญบัญชี LINE <b>หมอพร้อม</b> เข้ากลุ่ม</li>
           <li>Admin หน่วยบริการเข้า CMS MOPH Notify → <b>กลุ่มบอท</b> → จัดการ → <b>อนุมัติ</b> กลุ่มนั้น</li>
           <li>กดรูปตาที่ช่อง API Key ของกลุ่ม แล้วคัดลอก Client_ID / Secret มาวางที่นี่ → บันทึก → กด "ทดสอบส่ง"</li></ol></details>
-        <div class="row wrap mt-16" style="justify-content:flex-end"><button class="btn" onclick="App.testNotify()">${ic("send")} ทดสอบส่ง</button><button class="btn primary" onclick="App.saveSettings()">บันทึก</button></div></div>
+        <div class="row wrap mt-16" style="justify-content:flex-end"><span class="xs faint grow">ปุ่มทดสอบนี้ส่งเข้ากลุ่มหมอพร้อมอย่างเดียว · ไม่ใช้โควตา LINE OA</span><button class="btn" onclick="App.testNotify('moph')">${ic("send")} ทดสอบส่งเข้ากลุ่ม</button><button class="btn primary" onclick="App.saveSettings()">บันทึก</button></div></div>
         <div class="card card-pad mt-16"><h3>LINE Messaging API</h3><div class="muted small mt-4">ช่องทางหลักที่ใช้นับ notification_sent_at ตามนิยาม 5.7.4 · ข้อความไม่แสดง HN</div><div class="form-grid mt-16">
         ${field("Channel access token", `<input class="input" data-s="LINE_CHANNEL_ACCESS_TOKEN" type="password" placeholder="${s.LINE_TOKEN_SET ? "ตั้งค่าแล้ว · เว้นว่างถ้าไม่เปลี่ยน" : "วาง token ที่นี่"}">`, s.LINE_TOKEN_SET ? "✓ ตั้งค่าแล้ว" : "")}
         ${field("โหมดการส่ง", `<select class="input" data-s="LINE_SEND_MODE">${opt([["broadcast", "Broadcast (ทุกคนที่เพิ่มเพื่อน)"], ["push", "Push (ระบุกลุ่ม/ผู้ใช้)"]], s.LINE_SEND_MODE || "broadcast")}</select>`)}
@@ -1185,7 +1185,7 @@
         ${field("สรุปภาพรวมรายวัน 08:00 น.", `<select class="input" data-s="LINE_DAILY_DIGEST">${opt([["0", "ส่งผ่าน Push อย่างเดียว (ประหยัดโควตา LINE)"], ["1", "ส่งทั้ง LINE และ Push"], ["off", "ปิด ไม่ส่ง"]], s.LINE_DAILY_DIGEST || "0")}</select>`, "ไม่บังคับ · ช่วยเตือนยาที่หมดอายุแล้วแต่ยังไม่ได้เปลี่ยน และกล่องที่เลยวันตรวจ")}
         ${field("LINE To ID (โหมด push)", `<textarea class="input" data-s="LINE_TO_ID" placeholder="หนึ่งรายการต่อบรรทัด">${esc(s.LINE_TO_ID || "")}</textarea>`, "", "full")}</div>
         <div class="alert warn mt-16" style="padding:10px 14px"><div class="grow small">LINE OA แพ็กเกจฟรีมีโควตาจำกัดต่อเดือน และนับตาม<b>จำนวนผู้รับ</b> ถ้าโควตาหมด ข้อความเปิดกล่องจะส่งไม่สำเร็จ และเหตุการณ์นั้นจะไม่มี notification_sent_at</div><div id="lineQuota" class="small nowrap"><button class="btn sm" onclick="App.lineQuota()">ตรวจโควตา</button></div></div>
-        <div class="row wrap mt-16" style="justify-content:flex-end"><button class="btn" onclick="App.testNotify()">${ic("send")} ทดสอบส่ง LINE + Push</button><button class="btn" onclick="App.sendExpiry()">${ic("calendar-exclamation")} ส่งสรุปยาใกล้หมดอายุตอนนี้</button><button class="btn primary" id="setBtn" onclick="App.saveSettings()">บันทึก</button></div></div>`;
+        <div class="row wrap mt-16" style="justify-content:flex-end"><button class="btn" onclick="App.testNotify('line')">${ic("send")} ทดสอบส่ง LINE OA + Push</button><button class="btn" onclick="App.sendExpiry()">${ic("calendar-exclamation")} ส่งสรุปยาใกล้หมดอายุตอนนี้</button><button class="btn primary" id="setBtn" onclick="App.saveSettings()">บันทึก</button></div></div>`;
       body += `<div class="card card-pad mt-16"><div class="row between wrap gap-12"><div><h3>ตัวอย่างการ์ด LINE</h3><div class="muted small mt-4">หน้าตาจริงที่ส่งเข้า LINE OA (สร้างจากเซิร์ฟเวอร์ด้วยข้อมูลตัวอย่าง · ไม่แสดง HN ตามโครงร่างวิจัย)</div></div>
         <div class="seg" id="flexSeg">${[["open", "เปิดกล่อง"], ["escalate", "ยังไม่มีผู้รับทราบ"], ["expiry", "ยาใกล้หมดอายุ"], ["test", "ทดสอบ"]].map(([k, l], i) => `<button type="button" class="${i ? "" : "on"}" data-k="${k}" onclick="App.flexShow('${k}')">${l}</button>`).join("")}</div></div>
         <div class="flex-stage mt-16" id="flexStage"><div class="xs faint">กำลังโหลดตัวอย่าง…</div></div></div>`;
@@ -1232,12 +1232,15 @@
     S.data = r.data; toast("บันทึกตั้งค่าแล้ว"); App.render();
   });
   App.mophKinds = () => { const h = document.querySelector('[data-s="MOPH_KINDS"]'); if (h) h.value = $$("[data-mk]").filter((x) => x.checked).map((x) => x.dataset.mk).join(","); };
-  App.testNotify = async () => {
+  App.testNotify = async (channel = "all") => {
     try {
-      const r = await api("apiTestNotify", S.token);
+      const r = await api("apiTestNotify", S.token, channel);
       const m = r.moph || { skipped: true };
-      const msg = [`LINE OA: ${r.line.ok ? "สำเร็จ" : r.line.message}`, `หมอพร้อม: ${m.ok ? "สำเร็จ" : m.skipped ? "ไม่ได้เปิด" : m.message}`, `Push: ${r.push.sent || 0} เครื่อง`].join(" · ");
-      toast(msg, !r.line.ok && !m.ok && !r.push.sent);
+      const parts = [];
+      if (channel !== "moph") parts.push(`LINE OA: ${r.line.ok ? "สำเร็จ (ใช้โควตา)" : r.line.message}`);
+      if (channel !== "line") parts.push(`หมอพร้อม: ${m.ok ? "สำเร็จ" : m.skipped ? m.message || "ไม่ได้เปิด" : "ไม่สำเร็จ"}`);
+      if (channel !== "moph") parts.push(`Push: ${r.push.sent || 0} เครื่อง`);
+      toast(parts.join(" · "), channel === "moph" ? !m.ok : !r.line.ok && !m.ok && !r.push.sent);
       if (m.ok === false && !m.skipped) dialog({ title: "ส่งเข้ากลุ่มหมอพร้อมไม่สำเร็จ", body: `${esc(m.message || "")}\n\nตรวจว่า กลุ่มได้รับการอนุมัติใน CMS MOPH Notify แล้ว และ Client_ID / Secret ถูกต้อง`, confirm: "ตกลง", cancel: "" });
     } catch (e) { fail(e); }
   };

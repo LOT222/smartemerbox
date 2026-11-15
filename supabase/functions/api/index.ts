@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.16.0";
+const APP_VERSION = "2.16.1";
 const SCHEMA_REQUIRED = 7; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -1418,14 +1418,16 @@ async function apiSaveSettings(_c: Ctx, token: string, settings: Record<string, 
   return { data: await buildAppData(user) };
 }
 
-async function apiTestNotify(_c: Ctx, token: string) {
+// channel: "all" (ค่าเดิม) · "moph" = ทดสอบเฉพาะกลุ่มหมอพร้อม (ไม่ใช้โควตา LINE OA) · "line" = เฉพาะ LINE OA + Push
+async function apiTestNotify(_c: Ctx, token: string, channel = "all") {
   const user = await requireAdmin(token);
   const settings = await settingsObject();
   const flex = buildTestFlex(settings);
+  const skip = (m: string) => Promise.resolve({ ok: false, skipped: true, message: m } as any);
   const [line, moph, push] = await Promise.all([
-    sendLine(flex, settings),
-    sendMoph(flex, settings, "test"),
-    pushWithNotice({ kind: "test", title: "ทดสอบการแจ้งเตือน SEB", body: `ส่งโดย ${user.displayName || user.username}`, link: "settings/device" }, { tag: "test" }),
+    channel === "moph" ? skip("ไม่ได้ทดสอบ LINE OA") : sendLine(flex, settings),
+    channel === "line" ? skip("ไม่ได้ทดสอบหมอพร้อม") : sendMoph(flex, { ...settings, MOPH_ENABLED: channel === "moph" ? "1" : settings.MOPH_ENABLED }, "test"),
+    channel === "moph" ? Promise.resolve({ sent: 0, failed: 0 }) : pushWithNotice({ kind: "test", title: "ทดสอบการแจ้งเตือน SEB", body: `ส่งโดย ${user.displayName || user.username}`, link: "settings/device" }, { tag: "test" }),
   ]);
   return { line, moph, push };
 }
