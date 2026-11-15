@@ -527,6 +527,45 @@
     window.open(`${location.origin}${location.pathname}?page=open&boxId=${encodeURIComponent(id)}&t=${encodeURIComponent(t)}`, "_blank");
   };
 
+  // ---------- เลือกเรื่องที่ต้องการรับแจ้ง (รายบุคคล · ใช้กับทุกเครื่องของบัญชีนี้) ----------
+  const PREF_KINDS = [
+    ["case", "เปิดกล่องยาฉุกเฉิน", "แนะนำให้เปิดไว้เสมอ"],
+    ["escalate", "แจ้งซ้ำ · ยังไม่มีผู้รับทราบ", ""],
+    ["expiry", "ยาใกล้หมดอายุ (30/15/7 วัน)", ""],
+    ["daily", "สรุปประจำวัน 08:00 น.", ""],
+    ["account", "คำขอบัญชี / ลืมรหัสผ่าน", "admin"],
+  ];
+  function prefsCard() {
+    const p = S.user?.notifyPrefs || { hide: [], mute: [] };
+    const rows = PREF_KINDS.filter(([, , t]) => t !== "admin" || S.user?.role === "admin").map(([k, l, hint]) => {
+      const kd = App.NOTICE_KIND?.[k] || {};
+      const sw = (list, title) => `<label class="np-sw" title="${title}"><input type="checkbox" data-np="${list}" data-k="${k}" ${p[list].includes(k) ? "" : "checked"} onchange="App.prefDirty()"><span></span></label>`;
+      return `<div class="np-row"><span class="np-ic" style="--c:${kd.c || "#64748b"}">${ic(kd.icon || "bell")}</span><div class="grow"><div class="small" style="font-weight:600">${l}</div>${hint && hint !== "admin" ? `<div class="xs faint">${hint}</div>` : ""}</div>${sw("hide", "แสดงในกล่องแจ้งเตือน")}${sw("mute", "เด้งบนเครื่อง (Push)")}</div>`;
+    }).join("");
+    return `<div class="card card-pad mt-16"><div class="row between wrap gap-12"><div><h3>เลือกเรื่องที่ต้องการรับแจ้ง</h3><div class="muted small mt-4">ตั้งเฉพาะบัญชีของคุณ ใช้กับทุกเครื่องที่ล็อกอินบัญชีนี้ · ไม่กระทบคนอื่น และไม่กระทบกลุ่ม LINE</div></div></div>
+      <div class="np-head mt-16"><span class="grow"></span><span>ในระบบ</span><span>เด้งบนเครื่อง</span></div>
+      <div class="np-list">${rows}</div>
+      <div class="row mt-12" style="justify-content:space-between;align-items:center"><span class="xs faint">"ในระบบ" = แสดงในกล่องแจ้งเตือน/นับตัวเลขกระดิ่ง · "เด้งบนเครื่อง" = Push บนมือถือ/คอม · ปุ่มทดสอบส่งถึงเสมอ</span><button class="btn primary" id="npSave" onclick="App.savePrefs()" disabled>บันทึก</button></div></div>`;
+  }
+  App.prefDirty = () => {
+    const b = $("#npSave"); if (b) b.disabled = false;
+    const caseOff = $$('[data-np][data-k="case"]').some((x) => !x.checked);
+    if (caseOff && !App._warnedCase) { App._warnedCase = true; toast("ปิดแจ้งเตือนเปิดกล่องยาแล้ว จะพลาดเหตุฉุกเฉินได้ ตรวจให้แน่ใจก่อนบันทึก", true); }
+  };
+  App.savePrefs = async () => {
+    const prefs = { hide: [], mute: [] };
+    $$("[data-np]").forEach((x) => { if (!x.checked) prefs[x.dataset.np].push(x.dataset.k); });
+    try {
+      const r = await api("apiSaveNotifyPrefs", S.token, prefs);
+      S.user.notifyPrefs = r.notifyPrefs;
+      if (S.data) S.data.unreadNotices = r.unread || 0;
+      S.notices = null;
+      try { SEB.renderNav?.(); } catch (_) {}
+      toast("บันทึกการแจ้งเตือนของคุณแล้ว");
+      const b = $("#npSave"); if (b) b.disabled = true;
+    } catch (e) { fail(e); }
+  };
+
   App.bannerPrev = () => {
     const g = (k) => document.querySelector(`[data-s="${k}"]`)?.value || "";
     const el = $("#bannerPrev"); if (!el) return;
@@ -1156,6 +1195,7 @@
           <div class="row wrap mt-16">${on ? `<button class="btn" onclick="App.disablePush()">${ic("bell-off")} ปิดการแจ้งเตือน</button>` : `<button class="btn accent" onclick="App.enablePush()">${ic("bell-ringing")} ${sup.needsInstall ? "วิธีติดตั้งบน iPhone" : "เปิดรับแจ้งเตือน"}</button>`}
           <button class="btn" onclick="App.install()">${ic("download")} ติดตั้งแอป</button><button class="btn ghost" onclick="App.showInstallHelp()">${ic("help-circle")} วิธีติดตั้ง</button></div>
           <div class="xs faint mt-16">อุปกรณ์ที่ลงทะเบียนรับแจ้งเตือนทั้งหมด: ${D().pushDevices} เครื่อง${D().pushReady ? "" : " · ผู้ดูแลยังไม่ได้ตั้งค่า VAPID key"}</div></div>
+        ${prefsCard()}
         <div class="card card-pad mt-16"><div class="row between wrap gap-12"><div><h3>ธีมหน้าจอ</h3><div class="muted small mt-4">ตั้งเฉพาะเครื่องนี้</div></div>
           <div class="seg">${[["light", "สว่าง"], ["auto", "ตามเครื่อง"], ["dark", "มืด"]].map(([k, l]) => `<button class="${SEB.getTheme() === k ? "on" : ""}" onclick="SEB.setTheme('${k}');App.render()">${l}</button>`).join("")}</div></div></div>
         <div class="card card-pad mt-16"><div class="row between wrap gap-12"><h3>เวอร์ชันระบบ</h3><button class="btn sm ghost" onclick="App.checkVersion()">${ic("refresh")} ตรวจอีกครั้ง</button></div><div id="verBox" class="mt-12 small muted">กำลังตรวจ…</div></div>`;

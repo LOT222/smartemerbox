@@ -275,6 +275,7 @@
     apiSaveUser: (t, p) => { need(t); let u = users.find((x) => x.id === p.id); if (!u) { if (!p.password) err("กรุณากำหนดรหัสผ่านเริ่มต้น"); u = { id: id("u") }; users.push(u); } Object.assign(u, { username: p.username, displayName: p.displayName, role: p.role, position: p.position, staffCode: p.staffCode, researchConsent: p.researchConsent, active: p.active }); return { users }; },
     apiDeleteUser: (t, uid) => { need(t); users.find((u) => u.id === uid).active = false; return { users }; },
     apiSaveSettings: (t, p) => { need(t); Object.entries(p).forEach(([k, v]) => { if (k === "MOPH_CLIENT_KEY" || k === "MOPH_SECRET_KEY") { if (v) settings.MOPH_KEYS_SET = true; return; } if (k !== "LINE_CHANNEL_ACCESS_TOKEN") settings[k] = v; }); return { data: appData() }; },
+    apiSaveNotifyPrefs: (t, p) => { const u = need(t); u.notifyPrefs = { hide: p.hide || [], mute: p.mute || [] }; return { notifyPrefs: u.notifyPrefs, unread: 1 }; },
     apiTestFlex: (t, k) => { need(t); return { moph: { ok: true, message: "ส่งเข้ากลุ่ม LINE (หมอพร้อม) สำเร็จ" } }; },
     apiFlexPreview: (t) => { need(t); return JSON.parse(JSON.stringify(FLEX_SAMPLE)); },
     apiTestNotify: (t) => { need(t); return { line: { ok: true, message: "ส่ง LINE สำเร็จ" }, moph: settings.MOPH_ENABLED === "1" ? { ok: true, message: "ส่งเข้ากลุ่ม LINE (หมอพร้อม) สำเร็จ" } : { ok: false, skipped: true }, push: { sent: 4, failed: 0 } }; },

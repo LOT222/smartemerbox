@@ -16,6 +16,7 @@
     account: { icon: "user-plus", c: "#7c3aed", label: "คำขอบัญชี" },
     test: { icon: "speakerphone", c: "#475569", label: "ทดสอบ" },
   };
+  App.NOTICE_KIND = KIND;
   const kindOf = (n) => KIND[n.kind] || { icon: "bell", c: "#64748b", label: "แจ้งเตือน" };
   const items = () => S.notices?.items || [];
   const unread = () => S.data?.unreadNotices || 0;
@@ -118,7 +119,7 @@
     const list = items().slice(0, 8);
     pop.innerHTML = `
       <div class="ip-head"><b>การแจ้งเตือน</b>${unread() ? `<span class="pill danger plain">${unread()} ใหม่</span>` : ""}<span class="grow"></span>
-        ${unread() ? `<button class="btn ghost sm" onclick="App.markAllNotices()">${ic("checks")} อ่านทั้งหมด</button>` : ""}</div>
+        ${unread() ? `<button class="btn ghost sm" onclick="App.markAllNotices()">${ic("checks")} อ่านทั้งหมด</button>` : ""}<button class="btn ghost sm icon" title="เลือกเรื่องที่ต้องการรับแจ้ง" onclick="App.closeInboxPop();App.go('settings','device')">${ic("settings")}</button></div>
       <div class="ip-list">${!S.notices ? `<div class="empty">${ic("loader-2", "spin")}กำลังโหลด…</div>` : list.length ? list.map((n) => rowHtml(n, true)).join("") : empty("ยังไม่มีการแจ้งเตือน", "bell")}</div>
       <button class="ip-foot" onclick="App.closeInboxPop();App.go('inbox')">ดูการแจ้งเตือนทั้งหมด ${ic("chevron-right")}</button>`;
   }
@@ -159,7 +160,7 @@
       ${S.notices?.missing ? `<div class="alert warn mb-12"><div class="small">ผู้ดูแลระบบยังไม่ได้รันอัปเดตฐานข้อมูล (migration 0007) กล่องแจ้งเตือนจะเริ่มเก็บรายการหลังรันแล้ว</div></div>` : ""}
       <div class="row between mb-12 wrap">
         <div class="seg"><button class="${f === "all" ? "on" : ""}" onclick="S_inbox('all')">ทั้งหมด</button><button class="${f === "unread" ? "on" : ""}" onclick="S_inbox('unread')">ยังไม่อ่าน${unread() ? ` (${unread()})` : ""}</button></div>
-        <button class="btn ghost sm" onclick="App.go('settings','device')">${ic("settings")} ตั้งค่าการแจ้งเตือนเครื่องนี้</button>
+        <button class="btn ghost sm" onclick="App.go('settings','device')">${ic("settings")} เลือกเรื่องที่ต้องการรับแจ้ง</button>
       </div>
       <div class="card nt-list">${shown.length ? groupByDay(shown) : empty(f === "unread" ? "อ่านครบทุกรายการแล้ว" : "ยังไม่มีการแจ้งเตือน", f === "unread" ? "checks" : "bell")}</div>
       ${S.notices?.more && f === "all" ? `<button class="btn block mt-12" id="ntMore" onclick="App.moreNotices()">โหลดเพิ่ม</button>` : ""}

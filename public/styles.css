@@ -1204,3 +1204,20 @@ html.dark .sys-banner.lv-warn { background: rgba(217,119,6,.16); color: #fef3c7;
 }
 .alert.ok { background: #ecfdf3; border-color: #bbf7d0; color: #14532d; }
 .alert.danger { background: #fef2f2; border-color: #fca5a5; color: #7f1d1d; }
+
+/* v2.18 — เลือกเรื่องที่ต้องการรับแจ้ง */
+.np-head { display: flex; align-items: center; gap: 12px; padding: 0 4px 6px; font-size: 11.5px; color: var(--text-3, #8a8796); }
+.np-head span:not(.grow) { width: 76px; text-align: center; }
+.np-list { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.np-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px 10px 12px; border-top: 1px solid var(--border); }
+.np-row:first-child { border-top: 0; }
+.np-ic { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; background: color-mix(in srgb, var(--c) 12%, transparent); }
+.np-ic .ti { width: 18px; height: 18px; background-color: var(--c); }
+.np-sw { width: 76px; display: flex; justify-content: center; cursor: pointer; flex: none; }
+.np-sw input { position: absolute; opacity: 0; pointer-events: none; }
+.np-sw span { width: 42px; height: 24px; border-radius: 99px; background: #d4d4d8; position: relative; transition: background .15s; }
+.np-sw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.np-sw input:checked + span { background: #16a34a; }
+.np-sw input:checked + span::after { transform: translateX(18px); }
+.np-sw input:focus-visible + span { outline: 2px solid #3b82f6; outline-offset: 2px; }
+@media (max-width: 760px) { .np-head span:not(.grow), .np-sw { width: 62px; } }

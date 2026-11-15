@@ -7,8 +7,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.17.0";
-const SCHEMA_REQUIRED = 7; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
+const APP_VERSION = "2.18.0";
+const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -137,6 +137,7 @@ const actions: Record<string, Fn> = {
   apiTestNotify,
   apiFlexPreview,
   apiTestFlex,
+  apiSaveNotifyPrefs,
   apiSavePushSubscription,
   apiRemovePushSubscription,
   apiListNotifications,
@@ -172,7 +173,9 @@ async function notifyAdmins(title: string, body: string) {
   const ids = (admins || []).map((a: any) => a.id);
   const nid = await recordNotice({ kind: "account", title, body, link: "users", audience: "admin" });
   if (!ids.length || !VAPID_PUBLIC_KEY) return;
-  const { data: subs } = await db.from("pushSubscriptions").select("*").eq("active", true).in("userId", ids);
+  const muted = await mutedUserIds("account");
+  const { data: subs0 } = await db.from("pushSubscriptions").select("*").eq("active", true).in("userId", ids.filter((x: string) => !muted.has(x)));
+  const subs = subs0 || [];
   const url = nid ? noticeUrl(nid) : `${appUrl()}#/users`;
   await Promise.all((subs || []).map((s: any) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ title, body, tag: "account", url, nid }), { TTL: 86400 }).catch(() => null)));
 }
@@ -477,6 +480,7 @@ function publicUser(u: any) {
     position: u.position || "", staffCode: u.staffCode || "", phone: u.phone || "", researchConsent: !!u.researchConsent,
     lastLoginAt: u.lastLoginAt || null, pdpaVersion: u.pdpaVersion || "", consentOfficer: !!u.consentOfficer,
     displayText: u.position ? `${displayName}, ${u.position}` : displayName,
+    notifyPrefs: normPrefs(u.notifyPrefs),
   };
 }
 
@@ -745,7 +749,7 @@ async function notifyOpen(event: any, box: any, settings: any, escalation = fals
   const [{ line, moph }, push] = await Promise.all([
     sendGroupThenLine(flex, settings, escalation ? "escalate" : "open", !escalation || lineOnEscalate),
     // กดแจ้งเตือนเคส → เปิดหน้าเคสโดยตรง (เร่งด่วน) และทำเครื่องหมายว่าอ่านแล้ว
-    sendPushAll({ title, body: bodyText, tag: `case-${event.id}`, url: `${appUrl()}?case=${event.id}${nid ? `&n=${nid}` : ""}`, nid, urgent: true }),
+    sendPushAll({ title, body: bodyText, tag: `case-${event.id}`, url: `${appUrl()}?case=${event.id}${nid ? `&n=${nid}` : ""}`, nid, urgent: true, kind: escalation ? "escalate" : "case" }),
   ]);
   if (escalation) {
     return updateRow("openEvents", event.id, { escalatedAt: nowIso() });
@@ -1600,13 +1604,43 @@ function noticeItem(it: any) {
 async function pushWithNotice(n: Notice, extra: any = {}) {
   const nid = await recordNotice(n);
   const url = nid ? noticeUrl(nid) : `${appUrl()}${n.link ? `#/${n.link}` : ""}`;
-  return sendPushAll({ title: n.title, body: n.body || "", url, nid, ...extra });
+  return sendPushAll({ title: n.title, body: n.body || "", url, nid, kind: n.kind, ...extra });
 }
+// ---------- ตั้งค่าการแจ้งเตือนรายบุคคล ----------
+// hide = ไม่แสดงในกล่องแจ้งเตือน/ไม่นับยังไม่อ่าน · mute = ไม่เด้ง Push บนเครื่องของคนนี้ (ทดสอบ = ส่งเสมอ)
+const NOTICE_KINDS = ["case", "escalate", "expiry", "daily", "account", "test"];
+function normPrefs(p: any) {
+  const pick = (a: any) => (Array.isArray(a) ? a.map(String).filter((k) => NOTICE_KINDS.includes(k) && k !== "test") : []);
+  return { hide: pick(p?.hide), mute: pick(p?.mute) };
+}
+const hiddenKinds = (user: any) => normPrefs(user?.notifyPrefs).hide;
+function filterHidden(q: any, user: any) { const h = hiddenKinds(user); return h.length ? q.not("kind", "in", `(${h.join(",")})`) : q; }
+async function apiSaveNotifyPrefs(_c: Ctx, token: string, prefs: any) {
+  const user = await requireAuth(token);
+  const clean = normPrefs(prefs);
+  const { error } = await db.from("users").update({ notifyPrefs: clean }).eq("id", user.id);
+  if (error) {
+    if (/notifyPrefs|column/i.test(error.message)) throw new Error("ฐานข้อมูลยังไม่รองรับ (ต้องรัน migration 202611150002_notify_prefs.sql)");
+    throw error;
+  }
+  await audit(user, "save_notify_prefs", clean);
+  return { notifyPrefs: clean, unread: await unreadNoticeCount({ ...user, notifyPrefs: clean }) };
+}
+// ผู้ใช้ที่ปิด Push เรื่องนี้ไว้ (ถ้าคอลัมน์ยังไม่มี = ไม่มีใครปิด)
+async function mutedUserIds(kind: string) {
+  if (!kind || kind === "test") return new Set<string>();
+  try {
+    const { data, error } = await db.from("users").select("id,notifyPrefs");
+    if (error) return new Set<string>();
+    return new Set((data || []).filter((u: any) => normPrefs(u.notifyPrefs).mute.includes(kind)).map((u: any) => u.id));
+  } catch (_) { return new Set<string>(); }
+}
+
 function noticeAudience(user: any) { return user?.role === "admin" ? ["all", "admin"] : ["all"]; }
 async function unreadNoticeCount(user: any) {
   try {
     const since = new Date(Date.now() - 30 * 86400000).toISOString();
-    const { data: rows, error } = await db.from("notifications").select("id").in("audience", noticeAudience(user))
+    const { data: rows, error } = await filterHidden(db.from("notifications").select("id").in("audience", noticeAudience(user)), user)
       .gte("createdAt", since).order("createdAt", { ascending: false }).limit(200);
     if (error) throw error;
     const ids = (rows || []).map((r: any) => r.id);
@@ -1620,7 +1654,7 @@ async function unreadNoticeCount(user: any) {
 async function apiListNotifications(_c: Ctx, token: string, opts: any = {}) {
   const user = await requireAuth(token);
   const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
-  let q = db.from("notifications").select("*").in("audience", noticeAudience(user)).order("createdAt", { ascending: false }).limit(limit);
+  let q = filterHidden(db.from("notifications").select("*").in("audience", noticeAudience(user)), user).order("createdAt", { ascending: false }).limit(limit);
   if (opts.before) q = q.lt("createdAt", opts.before);
   const { data, error } = await q;
   if (error) {
@@ -1646,7 +1680,7 @@ async function apiMarkNotificationsRead(_c: Ctx, token: string, ids: any) {
   const user = await requireAuth(token);
   let list: string[] = [];
   if (ids === "all") {
-    const { data } = await db.from("notifications").select("id").in("audience", noticeAudience(user)).order("createdAt", { ascending: false }).limit(500);
+    const { data } = await filterHidden(db.from("notifications").select("id").in("audience", noticeAudience(user)), user).order("createdAt", { ascending: false }).limit(500);
     list = (data || []).map((r: any) => r.id);
   } else {
     list = (Array.isArray(ids) ? ids : [ids]).map(String).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 500);
@@ -1675,7 +1709,9 @@ async function cleanupNotices() {
 // =====================================================================
 async function sendPushAll(payload: any) {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return { sent: 0, failed: 0, skipped: true };
-  const { data: subs } = await db.from("pushSubscriptions").select("*").eq("active", true);
+  const { data: all } = await db.from("pushSubscriptions").select("*").eq("active", true);
+  const muted = await mutedUserIds(payload.kind);
+  const subs = (all || []).filter((s: any) => !s.userId || !muted.has(s.userId));
   let sent = 0, failed = 0;
   await Promise.all((subs || []).map(async (s: any) => {
     try {
