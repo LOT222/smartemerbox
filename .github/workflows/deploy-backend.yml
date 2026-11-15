@@ -38,7 +38,7 @@ jobs:
       - uses: supabase/setup-cli@v1
         if: steps.chk.outputs.skip != '1'
         with:
-          version: latest
+          version: 3.1.0   # ล็อกเวอร์ชัน (latest ต้องถาม GitHub API ทุกครั้ง → ติด rate limit ได้)
       - name: Deploy function "api"
         if: steps.chk.outputs.skip != '1'
         run: supabase functions deploy api --project-ref "$PROJECT_REF" --no-verify-jwt --yes
