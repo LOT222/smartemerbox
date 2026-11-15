@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.19.0";
+const APP_VERSION = "2.20.0";
 const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -642,7 +642,7 @@ async function apiPublicGetBox(_c: Ctx, boxId: string, qrToken: string) {
       items: items.map((it: any) => {
         const dl = daysUntil(it.expiryDate, today);
         return {
-          drugName: it.drugName, strength: it.strength, form: it.form, qty: it.qty, unit: it.unit, lot: it.lot,
+          drugName: it.drugName, strength: it.strength, form: it.form, qty: it.qty, requiredQty: Number(it.requiredQty || 0), unit: it.unit, lot: it.lot,
           expiryDate: it.expiryDate,
           expiryState: !it.expiryDate ? "unknown" : dl < 0 ? "expired" : dl <= nearDays ? "near" : "ok",
         };
@@ -652,7 +652,16 @@ async function apiPublicGetBox(_c: Ctx, boxId: string, qrToken: string) {
     recentOpeners,
     pharmacyPhone: settings.PHARMACY_PHONE || "",
     openReasons: String(settings.OPT_OPEN_REASONS || "").split("\n").map((x) => x.trim()).filter(Boolean),
+    banner: publicBanner(settings, bkkDate(new Date())),
   };
+}
+// แถบประกาศของระบบ → แสดงบนหน้าสแกน QR ด้วย (ตั้งที่ ตั้งค่า → ทั่วไป) · หมดเวลาตาม SYS_BANNER_UNTIL
+function publicBanner(settings: any, today: string) {
+  const text = String(settings.SYS_BANNER_TEXT || "").trim();
+  if (!text || String(settings.SYS_BANNER_PUBLIC ?? "1") === "0") return null;
+  const until = String(settings.SYS_BANNER_UNTIL || "");
+  if (until && today > until) return null;
+  return { text: text.slice(0, 600), level: String(settings.SYS_BANNER_LEVEL || "info"), until };
 }
 
 async function apiOpenBoxPublic(_c: Ctx, payload: any) {

@@ -209,7 +209,8 @@
       const recentOpeners = [...new Set(events.filter((e) => e.locationId === b.locationId && e.openerName).sort((a, c) => (a.recordedAt < c.recordedAt ? 1 : -1)).map((e) => e.openerName))].slice(0, 12);
       if (!recentOpeners.length) recentOpeners.push("พว.สมใจ ใจดี", "พว.วรรณา ศรีสุข", "พว.กมล ทองดี");
       const openReasons = settings.OPT_OPEN_REASONS ? String(settings.OPT_OPEN_REASONS).split("\n").map((x) => x.trim()).filter(Boolean) : null;
-      return { hospitalName: settings.HOSPITAL_NAME, pharmacyPhone: settings.PHARMACY_PHONE || "", recentOpeners, openReasons, box: { ...d, items: b.items.map((it) => { const dd = daysUntil(it.expiryDate); return { ...it, expiryState: dd < 0 ? "expired" : dd <= near() ? "near" : "ok" }; }) } };
+      const banner = settings.SYS_BANNER_TEXT && settings.SYS_BANNER_PUBLIC !== "0" ? { text: settings.SYS_BANNER_TEXT, level: settings.SYS_BANNER_LEVEL || "info", until: settings.SYS_BANNER_UNTIL || "" } : null;
+      return { hospitalName: settings.HOSPITAL_NAME, pharmacyPhone: settings.PHARMACY_PHONE || "", recentOpeners, openReasons, banner, box: { ...d, items: b.items.map((it) => { const dd = daysUntil(it.expiryDate); return { ...it, expiryState: dd < 0 ? "expired" : dd <= near() ? "near" : "ok" }; }) } };
     },
     apiOpenBoxPublic: (p) => {
       const b = boxes.find((x) => x.id === p.boxId) || err("QR ไม่ถูกต้อง");

@@ -928,7 +928,7 @@
     } catch (e) { fail(e); }
   };
   App.openSchedule = () => {
-    drawer("นัดวันตรวจกล่อง", `<div class="form-grid">${field("วันที่นัดตรวจ", `<input class="input" type="date" id="scDate">`)}${field("หมายเหตุ", `<input class="input" id="scNote">`)}</div>
+    drawer("นัดวันตรวจกล่อง", `<div class="form-grid">${field("วันที่นัดตรวจ", `${dateSel('id="scDate"', "", "", { be: true })}`)}${field("หมายเหตุ", `<input class="input" id="scNote">`)}</div>
       <label class="check mt-16"><input type="checkbox" id="scAll" onchange="SEB.$$('[data-sc]').forEach(c=>c.checked=this.checked)"> เลือกทุกกล่อง</label>
       <div class="card mt-8">${D().boxes.map((b) => `<label class="list-row check"><input type="checkbox" data-sc="${b.id}"> <span class="grow">${esc(b.boxCode)} <span class="faint small">${esc(b.location)}</span></span><span class="xs faint">${b.inspectionDate ? fmtD(b.inspectionDate) : ""}</span></label>`).join("")}</div>`,
       `<button class="btn ghost" onclick="App.closeDrawer()">ยกเลิก</button><button class="btn primary" id="scBtn" onclick="App.saveSchedule()">บันทึกวันนัด</button>`);
@@ -1088,7 +1088,7 @@
     S.logTo = S.logTo || X.todayStr();
     setTitle("ประวัติการใช้งาน", `<button class="btn" onclick="App.exportLogs()">${ic("download")} <span class="desktop-only">ส่งออก CSV</span></button>`);
     $("#content").innerHTML = `<div class="subnav"><button class="${S.logTab === "login" ? "on" : ""}" onclick="App.logTab('login')">การเข้าสู่ระบบ</button><button class="${S.logTab === "audit" ? "on" : ""}" onclick="App.logTab('audit')">การบันทึก / แก้ไขข้อมูล</button></div>
-      <div class="row wrap mb-16 gap-12"><input class="input" type="date" style="width:auto" id="lgFrom" value="${S.logFrom}"><span class="faint">ถึง</span><input class="input" type="date" style="width:auto" id="lgTo" value="${S.logTo}"><button class="btn" onclick="S_logRange()">ค้นหา</button><input class="input" style="max-width:240px" placeholder="กรองชื่อผู้ใช้ / การกระทำ" id="lgQ" oninput="App.renderLogs()">
+      <div class="row wrap mb-16 gap-12"><span style="min-width:170px">${dateSel('id="lgFrom"', S.logFrom, "", { be: true })}</span><span class="faint">ถึง</span><span style="min-width:170px">${dateSel('id="lgTo"', S.logTo, "", { be: true })}</span><button class="btn" onclick="S_logRange()">ค้นหา</button><input class="input" style="max-width:240px" placeholder="กรองชื่อผู้ใช้ / การกระทำ" id="lgQ" oninput="App.renderLogs()">
         <span class="grow"></span><span class="xs faint">แสดง</span><div class="seg" id="lgLimit">${[["50", "50"], ["100", "100"], ["all", "ทั้งหมด"]].map(([k, t]) => `<button type="button" class="${String(S.logLimit || "50") === k ? "on" : ""}" onclick="App.logLimit('${k}')">${t}</button>`).join("")}</div></div>
       <div class="card" id="logBody">${empty("กำลังโหลด…", "loader-2")}</div>`;
     try {
@@ -1233,7 +1233,7 @@
     const tabs = [["device", "เครื่องนี้"], ["account", "บัญชีของฉัน"], ...(isAdmin() ? [["general", "ทั่วไป"], ["options", "รายการตัวเลือก"], ["notify", "การแจ้งเตือน"], ["study", "ช่วงการศึกษา"], ["pdpa", "PDPA / ความยินยอม"]] : [])];
     setTitle("ตั้งค่า");
     const s = D().settings;
-    const sf = (k, label, type = "text", hint = "") => field(label, `<input class="input" data-s="${k}" type="${type}" value="${esc(s[k] ?? "")}">`, hint);
+    const sf = (k, label, type = "text", hint = "") => field(label, type === "date" ? dateSel(`data-s="${k}"`, s[k] || "", "", { be: true }) : `<input class="input" data-s="${k}" type="${type}" value="${esc(s[k] ?? "")}">`, hint);
     let body = "";
     if (t === "device") {
       const sup = App.pushSupport();
@@ -1259,7 +1259,8 @@
         <div class="card card-pad mt-16"><h3>แถบประกาศของระบบ</h3><div class="muted small mt-4">ข้อความนี้จะแสดงเป็นแถบด้านบนทุกหน้า ให้ผู้ใช้ทุกคนที่เข้าระบบเห็น เช่น แจ้งปิดปรับปรุงระบบ เปลี่ยนชุดยา หรือนัดตรวจกล่อง · ลบข้อความ = ปิดแถบ</div>
           <div class="form-grid mt-16">${field("ข้อความประกาศ", `<textarea class="input" rows="2" data-s="SYS_BANNER_TEXT" oninput="App.bannerPrev()" placeholder="เช่น คืนวันเสาร์นี้ 22:00–23:00 น. ปิดปรับปรุงระบบ ให้บันทึกการเปิดกล่องลงกระดาษ">${esc(s.SYS_BANNER_TEXT || "")}</textarea>`, "", "span-2")}
           ${field("ระดับ", `<select class="input" data-s="SYS_BANNER_LEVEL" onchange="App.bannerPrev()">${opt([["info", "ประกาศ (ฟ้า)"], ["ok", "แจ้งข่าว (เขียว)"], ["warn", "แจ้งเตือน (ส้ม)"], ["danger", "ด่วน (แดง · ปิดแถบไม่ได้)"]], s.SYS_BANNER_LEVEL || "info")}</select>`)}
-          ${field("แสดงถึงวันที่", dateSel('data-s="SYS_BANNER_UNTIL"', s.SYS_BANNER_UNTIL || "", "App.bannerPrev()"), "เว้นว่าง = แสดงจนกว่าจะลบข้อความ")}</div>
+          ${field("แสดงถึงวันที่", dateSel('data-s="SYS_BANNER_UNTIL"', s.SYS_BANNER_UNTIL || "", "App.bannerPrev()", { be: true }), "เว้นว่าง = แสดงจนกว่าจะลบข้อความ")}
+          ${field("แสดงบนหน้าสแกน QR (พยาบาล)", `<select class="input" data-s="SYS_BANNER_PUBLIC">${opt([["1", "แสดง · เช่น แจ้งปิดปรับปรุงให้บันทึกลงกระดาษ"], ["0", "ไม่แสดง · เฉพาะผู้ที่ล็อกอิน"]], s.SYS_BANNER_PUBLIC ?? "1")}</select>`)}</div>
           <div class="xs faint mt-12">ตัวอย่าง</div><div id="bannerPrev" class="mt-4">${X.bannerHtml(s, true) || `<div class="xs faint">— ยังไม่มีประกาศ —</div>`}</div>
           <div class="row mt-16" style="justify-content:flex-end"><button class="btn primary" onclick="App.saveSettings()">บันทึกประกาศ</button></div></div>
         <div class="card card-pad mt-16"><h3>เกณฑ์การทำงาน</h3><div class="form-grid mt-16">${field("ระบบเลขซีล", `<select class="input" data-s="SEAL_ENABLED">${opt([["0", "ปิด · ซ่อนช่องเลขซีลทุกหน้า (ยังไม่มีซีลใช้)"], ["1", "เปิด · บันทึก/แสดงเลขซีลกล่อง"]], s.SEAL_ENABLED ?? "0")}</select>`, "เปิดเมื่อเริ่มใช้ซีลล็อกกล่องที่มีเลขกำกับ · ข้อมูลเลขซีลเดิมยังเก็บไว้")}${sf("NEAR_EXPIRY_DAYS", "ใกล้หมดอายุ (วัน)", "number")}${sf("INSPECTION_INTERVAL_DAYS", "รอบตรวจกล่อง (วัน)", "number")}${sf("RESPONSE_TARGET_MIN", "เป้าหมายตอบสนอง (นาที)", "number")}${sf("ESCALATE_AFTER_MIN", "แจ้งซ้ำถ้าไม่มีผู้รับทราบ (นาที)", "number")}${sf("PUBLIC_OPEN_COOLDOWN_SEC", "กันสแกนซ้ำ (วินาที)", "number")}${sf("DEFAULT_PASSWORD", "รหัสผ่านเริ่มต้น")}${field("สมัครสมาชิกเอง", `<select class="input" data-s="ALLOW_SIGNUP">${opt([["1", "เปิด (รอผู้ดูแลอนุมัติ)"], ["0", "ปิด"]], s.ALLOW_SIGNUP ?? "1")}</select>`)}</div>

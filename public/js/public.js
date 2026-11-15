@@ -21,6 +21,7 @@
       P.phone = r.pharmacyPhone || "";
       P.recent = r.recentOpeners || [];
       P.reasons = r.openReasons && r.openReasons.length ? r.openReasons : REASONS;
+      P.banner = r.banner || null;
     };
     try {
       const r = await api("apiPublicGetBox", boxId, t);
@@ -43,6 +44,12 @@
   };
 
   // ---------- หน้าเลือก: เปิดกล่อง / ดูรายการยา ----------
+  // แถบประกาศของระบบ (ตั้งที่ ตั้งค่า → ทั่วไป) · ออฟไลน์ใช้ค่าที่เก็บไว้ แต่ซ่อนเมื่อเลยวันที่กำหนด
+  const pubBanner = () => {
+    const b = P.banner; if (!b || !b.text) return "";
+    if (b.until && new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10) > b.until) return "";
+    return `<div class="pub-banner">${X.bannerHtml({ SYS_BANNER_TEXT: b.text, SYS_BANNER_LEVEL: b.level, SYS_BANNER_UNTIL: b.until }, true)}</div>`;
+  };
   const BE = (v) => (X.fmtDLong ? X.fmtDLong(v) : fmtD(v));
   function hero(b) {
     const statePill = b.state === "ready" ? `<span class="pill ok">พร้อมใช้</span>` : b.state === "opened" || b.state === "refilling" ? `<span class="pill warn">มีเคสเปิดค้างอยู่</span>` : `<span class="pill danger">${esc(b.status)}</span>`;
@@ -68,7 +75,7 @@
     const st = itemStats(b);
     document.title = `${b.boxCode} · กล่องยาฉุกเฉิน`;
     $("#app").innerHTML = `
-    <div class="public"><div class="public-wrap">${demoBack()}
+    <div class="public"><div class="public-wrap">${demoBack()}${pubBanner()}
       ${hero(b)}
       <div class="card public-hero">
         <div class="xs faint">${ic("map-pin")} ${esc(b.location || "")} · ${b.locationZone === "out" ? "นอก รพ." : "ใน รพ."}</div>
@@ -100,17 +107,20 @@
     const lv = (g) => g.lots.some((x) => x.expiryState === "expired") ? "exp" : g.lots.some((x) => x.expiryState === "near") ? "near" : "";
     const sorted = [...groups].sort((a, z) => ({ exp: 0, near: 1, "": 2 })[lv(a)] - ({ exp: 0, near: 1, "": 2 })[lv(z)]);
     $("#app").innerHTML = `
-    <div class="public"><div class="public-wrap">${demoBack()}
+    <div class="public"><div class="public-wrap">${demoBack()}${pubBanner()}
       <div class="row between"><button class="btn ghost sm" onclick="App.pubBack()">${ic("chevron-left")} กลับ</button><div class="small" style="font-weight:650">${esc(b.boxCode)} <span class="faint" style="font-weight:400">· ${esc(b.location || "")}</span></div></div>
       <div class="card card-pad">
         <div class="row between wrap gap-8"><h3>รายการยาในกล่อง</h3><span class="xs faint">${groups.length} รายการ · ${b.items.length} lot</span></div>
         <div class="mt-12">${st.exp || st.near ? `<div class="iss-box ${st.exp ? "lv-exp" : "lv-near"}"><div class="iss-head">${ic(st.exp ? "alert-circle" : "alert-triangle")} <b>${st.exp ? `หมดอายุ ${st.exp} lot` : ""}${st.exp && st.near ? " · " : ""}${st.near ? `ใกล้หมดอายุ ${st.near} lot` : ""}</b></div><div class="small" style="color:var(--text-2)">แจ้งห้องยาเพื่อเปลี่ยน lot · ยาที่มีปัญหาแสดงไว้ด้านบนสุด</div></div>` : `<div class="iss-ok">${ic("circle-check")} ยาทุกรายการยังไม่ใกล้หมดอายุ</div>`}</div>
         ${P.offline ? `<div class="xs faint mt-8">${ic("wifi-off")} ข้อมูลที่บันทึกไว้ในเครื่อง ณ ${P.cachedAt ? `${BE(P.cachedAt)} ${fmtT(P.cachedAt)} น.` : "–"}</div>` : ""}
-        ${groups.length ? `<div class="pl-head mt-16"><span>Lot</span><span>หมดอายุ (พ.ศ.)</span><span>จำนวน</span></div>
+        ${groups.length ? `<div class="pl-head mt-16"><span>Lot</span><span>หมดอายุ (พ.ศ.)</span><span>จำนวน</span></div><div class="xs faint" style="margin:-2px 14px 6px;text-align:right">ตัวเลขข้างชื่อยา = มี / ควรมี</div>
         <div class="pl-list">${sorted.map((g) => {
           const tot = g.lots.reduce((a, x) => a + Number(x.qty || 0), 0);
+          const req = Math.max(0, ...g.lots.map((x) => Number(x.requiredQty || 0)));
+          const qc = req && tot < req ? "q-short" : req && tot > req ? "q-over" : "";
           return `<div class="pl-drug" data-issue="${lv(g)}">
-            <div class="pl-top"><div class="pl-name"><b>${esc(g.drugName)}</b> <span class="muted">${esc(g.strength)}</span></div><div class="pl-q"><b>${tot}</b> <small>${esc(g.unit)}</small></div></div>
+            <div class="pl-top"><div class="pl-name"><b>${esc(g.drugName)}</b> <span class="muted">${esc(g.strength)}</span></div><div class="pl-q ${qc}" title="มี / ควรมี"><b>${tot}</b>${req ? `<span>/${req}</span>` : ""} <small>${esc(g.unit)}</small></div></div>
+            ${req && tot !== req ? `<div class="pl-qmsg ${qc}">${tot < req ? `ขาด ${req - tot} ${esc(g.unit)}` : `เกิน ${tot - req} ${esc(g.unit)}`} · แจ้งห้องยา</div>` : ""}
             <div class="pl-lots">${g.lots.map((x) => `<div class="pl-lot"><span class="pl-l">${esc(x.lot || "–")}</span><span class="pl-e ${x.expiryState === "expired" ? "e-exp" : x.expiryState === "near" ? "e-near" : ""}">${x.expiryDate ? BE(x.expiryDate) : "–"}${x.expiryState === "expired" ? " · หมดแล้ว" : ""}</span><span class="pl-n">${esc(x.qty)}</span></div>`).join("")}</div></div>`;
         }).join("")}</div>` : X.empty("ยังไม่มีรายการยาในกล่องนี้", "pill-off")}
       </div>
@@ -133,7 +143,7 @@
     P.names = names;
     const statePill = b.state === "ready" ? `<span class="pill ok">พร้อมใช้</span>` : b.state === "opened" || b.state === "refilling" ? `<span class="pill warn">มีเคสเปิดค้างอยู่</span>` : `<span class="pill danger">${esc(b.status)}</span>`;
     $("#app").innerHTML = `
-    <div class="public"><div class="public-wrap">${demoBack()}
+    <div class="public"><div class="public-wrap">${demoBack()}${pubBanner()}
       <div class="row between"><button class="btn ghost sm" onclick="App.pubBack()">${ic("chevron-left")} กลับ</button>${statePill}</div>
       <div class="card public-hero">
         <div class="xs faint">${esc(b.location || "")} · ${b.locationZone === "out" ? "นอก รพ." : "ใน รพ."}</div>

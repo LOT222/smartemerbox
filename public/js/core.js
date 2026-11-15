@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.19.0";
+  const APP_VERSION = "2.20.0";
 
   const S = {
     demo: DEMO,
@@ -368,8 +368,13 @@
   // ---------------- ช่องเลือกวันที่: กรอกเป็น ค.ศ. + เดือนมีเลขกำกับ, แสดงผลเป็น พ.ศ. ----------------
   // เก็บค่าจริงใน <input type="hidden" ...attrs> รูปแบบ YYYY-MM-DD เพื่อให้โค้ดเดิมอ่าน .value ได้เหมือนเดิม
   const EN_M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  function dateSel(attrs, iso, onch) {
+  // opts.be = วันที่ทั่วไป (ไม่ใช่วันหมดอายุยา) → เลือกและแสดงเป็น พ.ศ. ทั้งหมด, ไม่ระบายสีใกล้หมดอายุ
+  function dateSel(attrs, iso, onch, opts = {}) {
     const v = /^\d{4}-\d{2}-\d{2}/.test(String(iso || "")) ? String(iso).slice(0, 10) : "";
+    if (opts.be) {
+      return `<span class="dsel dpick be"><input type="hidden" ${attrs} value="${v}">
+      <button type="button" class="input ${opts.sm ? "sm " : ""}dpick-btn" data-mode="be" data-onch="${esc(onch || "")}" onclick="SEB.datePick(this)"><span class="dpick-v">${v ? fmtDLong(v) : `<span class="faint">${esc(opts.placeholder || "วว/ดด/ปปปป (พ.ศ.)")}</span>`}</span>${ic("calendar")}</button><small class="dsel-th"></small></span>`;
+    }
     const dd = daysUntil(v), st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
     return `<span class="dsel dpick" data-st="${st}"><input type="hidden" ${attrs} value="${v}">
       <button type="button" class="input sm dpick-btn" data-onch="${esc(onch || "")}" title="${v ? "พ.ศ. " + fmtDLong(v) : ""}" onclick="SEB.datePick(this)"><span class="dpick-v">${v ? fmtCE(v) : `<span class="faint">วว/ดด/ปปปป</span>`}</span>${ic("calendar")}</button>
@@ -389,10 +394,10 @@
   function datePick(btn) {
     const w = btn.closest(".dpick"); if (!w) return;
     const v = w.querySelector('input[type="hidden"]').value;
-    const dt = btn.dataset.mode === "dt";
+    const dt = btn.dataset.mode === "dt", beMode = dt || btn.dataset.mode === "be";
     const base = v ? new Date(dt ? v : v + "T00:00:00") : new Date();
     const now = localInput();
-    DP = { w, btn, dt, y: base.getFullYear(), m: base.getMonth() + 1, sel: dt ? (v || now).slice(0, 10) : v, h: (v || now).slice(11, 13) || "00", mi: (v || now).slice(14, 16) || "00" };
+    DP = { w, btn, dt, be: beMode, y: base.getFullYear(), m: base.getMonth() + 1, sel: dt ? (v || now).slice(0, 10) : v, h: (v || now).slice(11, 13) || "00", mi: (v || now).slice(14, 16) || "00" };
     document.querySelector(".dp-back")?.remove();
     const el = document.createElement("div");
     el.className = "dp-back";
@@ -404,7 +409,7 @@
     const el = document.querySelector(".dp-back"); if (!el || !DP) return;
     const { y, m } = DP;
     const cur = DP.dt ? DP.sel : DP.w.querySelector('input[type="hidden"]').value;
-    const be = DP.dt, maxDay = DP.dt && DP.w.dataset.max === "now" ? todayStr() : "";
+    const be = DP.be, maxDay = DP.dt && DP.w.dataset.max === "now" ? todayStr() : "";
     const today = todayStr();
     const first = new Date(y, m - 1, 1).getDay();
     const days = new Date(y, m, 0).getDate(), prevDays = new Date(y, m - 1, 0).getDate();
@@ -428,12 +433,12 @@
         <button type="button" class="btn icon" onclick="SEB.dpMove(1)" title="เดือนถัดไป">${ic("chevron-right")}</button></div>
       <div class="dp-title">${be ? `<b>${EN_M[m - 1]} (${m}) ${y + 543}</b><span class="faint"> · พ.ศ.</span>` : `<b>${EN_M[m - 1]} (${m}) ${y}</b><span class="faint"> · ค.ศ. (พ.ศ. ${y + 543})</span>`}</div>
       <div class="dp-grid">${["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d, i) => `<span class="dp-w${i === 0 ? " sun" : ""}">${d}</span>`).join("")}${cells.join("")}</div>
-      ${be ? `<div class="dp-time"><span>เวลา</span><select class="input" onchange="SEB.dpTime('h',this.value)">${Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((x) => `<option${x === DP.h ? " selected" : ""}>${x}</option>`).join("")}</select><b>:</b><select class="input" onchange="SEB.dpTime('mi',this.value)">${Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((x) => `<option${x === DP.mi ? " selected" : ""}>${x}</option>`).join("")}</select><span class="faint">น.</span></div>
+      ${DP.dt ? `<div class="dp-time"><span>เวลา</span><select class="input" onchange="SEB.dpTime('h',this.value)">${Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((x) => `<option${x === DP.h ? " selected" : ""}>${x}</option>`).join("")}</select><b>:</b><select class="input" onchange="SEB.dpTime('mi',this.value)">${Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((x) => `<option${x === DP.mi ? " selected" : ""}>${x}</option>`).join("")}</select><span class="faint">น.</span></div>
       <div class="dp-sum">${DP.sel ? fmtBEdt(`${DP.sel}T${DP.h}:${DP.mi}`) : "ยังไม่ได้เลือกวัน"}</div>
       <div class="dp-foot"><button type="button" class="btn" onclick="SEB.dpNow()">ตอนนี้ · Now</button><button type="button" class="btn" onclick="SEB.dpClose()">ยกเลิก</button><button type="button" class="btn primary" onclick="SEB.dpOk()">ตกลง</button></div>
       <div class="dp-note">วันที่แสดงเป็น พ.ศ.</div></div>` : `
       <div class="dp-foot"><button type="button" class="btn" onclick="SEB.dpSet('${today}')">วันนี้ · Today</button><button type="button" class="btn" onclick="SEB.dpSet('')">ล้าง</button><button type="button" class="btn" onclick="SEB.dpClose()">ปิด</button></div>
-      <div class="dp-note">เลือก/กรอกเป็น ค.ศ. · ระบบแสดงผลเป็น พ.ศ.</div></div>`}`;
+      <div class="dp-note">${be ? "วันที่เป็น พ.ศ." : "เลือก/กรอกเป็น ค.ศ. · ระบบแสดงผลเป็น พ.ศ."}</div></div>`}`;
   }
   function dpMove(step, month, year) {
     if (!DP) return;
@@ -462,11 +467,15 @@
     const { w, btn } = DP;
     const hid = w.querySelector('input[type="hidden"]');
     hid.value = v;
-    w.querySelector(".dpick-v").innerHTML = v ? fmtCE(v) : `<span class="faint">วว/ดด/ปปปป</span>`;
-    w.querySelector(".dsel-th").textContent = v ? "พ.ศ. " + fmtDLong(v) : "";
-    btn.title = v ? "พ.ศ. " + fmtDLong(v) : "";
-    const dd = daysUntil(v);
-    w.dataset.st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
+    if (DP.be) {
+      w.querySelector(".dpick-v").innerHTML = v ? fmtDLong(v) : `<span class="faint">วว/ดด/ปปปป (พ.ศ.)</span>`;
+    } else {
+      w.querySelector(".dpick-v").innerHTML = v ? fmtCE(v) : `<span class="faint">วว/ดด/ปปปป</span>`;
+      w.querySelector(".dsel-th").textContent = v ? "พ.ศ. " + fmtDLong(v) : "";
+      btn.title = v ? "พ.ศ. " + fmtDLong(v) : "";
+      const dd = daysUntil(v);
+      w.dataset.st = !v ? "" : dd < 0 ? "exp" : dd <= nearDays() ? "near" : "";
+    }
     dpClose();
     const f = btn.dataset.onch;
     if (f) { try { new Function(f).call(hid); } catch (e) { console.error(e); } }
