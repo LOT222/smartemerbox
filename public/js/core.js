@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.15.0";
+  const APP_VERSION = "2.16.0";
 
   const S = {
     demo: DEMO,
@@ -241,7 +241,7 @@
       dl.innerHTML = `<h3>${esc(title)}</h3>${body ? `<div class="muted mt-8" style="white-space:pre-line">${body}</div>` : ""}
         ${ch.length ? `<div class="chips dlg-chips mt-16">${ch.map((c, i) => `<button type="button" class="chip" data-c="${i}">${esc(c)}</button>`).join("")}</div>` : ""}
         ${input ? `<div class="field ${ch.length ? "mt-12" : "mt-16"}">${ch.length ? `<span>หรือพิมพ์เอง</span>` : ""}${input.label ? `<span>${esc(input.label)}</span>` : ""}${input.type === "textarea" ? `<textarea class="input" id="dlgInput" placeholder="${esc(input.placeholder || "")}"></textarea>` : (input.type === "datetime-local" ? dtSel('id="dlgInput"', input.value || "", { max: true }) : `<input class="input" id="dlgInput" type="${input.type || "text"}" placeholder="${esc(input.placeholder || "")}" value="${esc(input.value || "")}">`)}</div>` : ""}
-        <div class="row mt-24" style="justify-content:flex-end"><button class="btn ghost" data-r="0">${esc(cancel)}</button><button class="btn ${danger ? "danger" : "primary"}" data-r="1">${esc(confirm)}</button></div>`;
+        <div class="row mt-24" style="justify-content:flex-end">${cancel ? `<button class="btn ghost" data-r="0">${esc(cancel)}</button>` : ""}<button class="btn ${danger ? "danger" : "primary"}" data-r="1">${esc(confirm)}</button></div>`;
       const close = (r) => { ov.remove(); dl.remove(); resolve(r); };
       dl.querySelectorAll("[data-c]").forEach((b) => (b.onclick = () => {
         const inp = dl.querySelector("#dlgInput"); inp.value = ch[+b.dataset.c]; inp.classList.remove("err");

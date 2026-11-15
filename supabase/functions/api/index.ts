@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.15.0";
+const APP_VERSION = "2.16.0";
 const SCHEMA_REQUIRED = 7; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -25,7 +25,7 @@ const SESSION_MAX_HOURS = 12;         // อายุสูงสุดของ
 const PBKDF2_ITER = 100_000;
 const TZ = "Asia/Bangkok";
 
-const SECRET_SETTING_KEYS = new Set(["LINE_CHANNEL_ACCESS_TOKEN"]);
+const SECRET_SETTING_KEYS = new Set(["LINE_CHANNEL_ACCESS_TOKEN", "MOPH_CLIENT_KEY", "MOPH_SECRET_KEY"]);
 
 const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
@@ -530,6 +530,8 @@ function sanitizeSettings(s: Record<string, string>) {
   const out: Record<string, any> = {};
   for (const [k, v] of Object.entries(s)) if (!SECRET_SETTING_KEYS.has(k)) out[k] = v;
   out.LINE_TOKEN_SET = !!s.LINE_CHANNEL_ACCESS_TOKEN;
+  out.MOPH_KEYS_SET = !!(s.MOPH_CLIENT_KEY && s.MOPH_SECRET_KEY);
+  out.MOPH_CLIENT_HINT = s.MOPH_CLIENT_KEY ? `…${String(s.MOPH_CLIENT_KEY).slice(-4)}` : "";
   return out;
 }
 
@@ -738,22 +740,28 @@ async function notifyOpen(event: any, box: any, settings: any, escalation = fals
     kind: escalation ? "escalate" : "case", title, body: bodyText, link: `case/${event.id}`,
     detail: { eventId: event.id, eventCode: event.eventCode, boxCode: box.boxCode, location: event.locationName || box.location || "", reason: event.reasonCategory || "", openedAt: event.actualOpenedAt },
   });
-  const [line, push] = await Promise.all([
-    escalation && !lineOnEscalate ? Promise.resolve({ ok: false, skipped: true } as any) : sendLine(buildOpenFlex(event, box, settings, escalation), settings),
+  const flex = buildOpenFlex(event, box, settings, escalation);
+  const [line, moph, push] = await Promise.all([
+    escalation && !lineOnEscalate ? Promise.resolve({ ok: false, skipped: true } as any) : sendLine(flex, settings),
+    sendMoph(flex, settings, escalation ? "escalate" : "open"),
     // กดแจ้งเตือนเคส → เปิดหน้าเคสโดยตรง (เร่งด่วน) และทำเครื่องหมายว่าอ่านแล้ว
     sendPushAll({ title, body: bodyText, tag: `case-${event.id}`, url: `${appUrl()}?case=${event.id}${nid ? `&n=${nid}` : ""}`, nid, urgent: true }),
   ]);
   if (escalation) {
     return updateRow("openEvents", event.id, { escalatedAt: nowIso() });
   }
+  // นับว่าแจ้งสำเร็จถ้าช่องทาง LINE ใดช่องทางหนึ่งส่งได้ (LINE OA หรือ กลุ่ม LINE ผ่านหมอพร้อม)
+  const anyOk = line.ok || moph.ok, allSkip = line.skipped && moph.skipped;
+  const errs = [line.ok || line.skipped ? "" : line.message, moph.ok || moph.skipped ? "" : moph.message].filter(Boolean).join(" · ");
   const patch: any = {
-    notificationStatus: line.skipped ? "skipped" : line.ok ? "sent" : "failed",
-    notificationError: line.ok ? null : (line.message || "").slice(0, 300),
+    notificationStatus: allSkip ? "skipped" : anyOk ? "sent" : "failed",
+    notificationError: anyOk ? (errs ? errs.slice(0, 300) : null) : (errs || line.message || "").slice(0, 300),
     pushSent: push.sent,
     pushFailed: push.failed,
     pushSentAt: push.sent > 0 ? nowIso() : null,
   };
-  if (line.ok) patch.notificationSentAt = line.at;
+  const firstAt = [line.ok ? line.at : "", moph.ok ? moph.at : ""].filter(Boolean).sort()[0];
+  if (firstAt) patch.notificationSentAt = firstAt;
   return updateRow("openEvents", event.id, patch);
 }
 
@@ -1303,7 +1311,7 @@ async function apiBackup(_c: Ctx, key: string, table: string) {
     rows.push(...(data || []));
     if (!data || data.length < 1000) break;
   }
-  if (table === "settings") rows.forEach((r) => { if (r.key === "LINE_CHANNEL_ACCESS_TOKEN") r.value = r.value ? "***" : ""; });
+  if (table === "settings") rows.forEach((r) => { if (SECRET_SETTING_KEYS.has(r.key)) r.value = r.value ? "***" : ""; });
   return { table, rows, count: rows.length, at: nowIso() };
 }
 
@@ -1402,8 +1410,8 @@ async function apiSaveSettings(_c: Ctx, token: string, settings: Record<string, 
   const user = await requireAdmin(token);
   const now = nowIso();
   for (const [key, value] of Object.entries(settings || {})) {
-    if (key === "LINE_TOKEN_SET") continue;
-    if (key === "LINE_CHANNEL_ACCESS_TOKEN" && !String(value || "").trim()) continue; // เว้นว่าง = ไม่เปลี่ยน
+    if (key === "LINE_TOKEN_SET" || key === "MOPH_KEYS_SET" || key === "MOPH_CLIENT_HINT") continue;
+    if (SECRET_SETTING_KEYS.has(key) && !String(value || "").trim()) continue; // เว้นว่าง = ไม่เปลี่ยน
     await db.from("settings").upsert({ key, value: String(value ?? ""), updatedAt: now, updatedBy: user.username }, { onConflict: "key" });
   }
   await audit(user, "save_settings", Object.keys(settings || {}));
@@ -1413,11 +1421,13 @@ async function apiSaveSettings(_c: Ctx, token: string, settings: Record<string, 
 async function apiTestNotify(_c: Ctx, token: string) {
   const user = await requireAdmin(token);
   const settings = await settingsObject();
-  const [line, push] = await Promise.all([
-    sendLine(buildTestFlex(settings), settings),
+  const flex = buildTestFlex(settings);
+  const [line, moph, push] = await Promise.all([
+    sendLine(flex, settings),
+    sendMoph(flex, settings, "test"),
     pushWithNotice({ kind: "test", title: "ทดสอบการแจ้งเตือน SEB", body: `ส่งโดย ${user.displayName || user.username}`, link: "settings/device" }, { tag: "test" }),
   ]);
-  return { line, push };
+  return { line, moph, push };
 }
 
 async function apiSavePushSubscription(ctx: Ctx, token: string, sub: any, deviceLabel: string) {
@@ -1496,7 +1506,9 @@ async function sendExpiryMilestones() {
   }
   const due = cands.filter((c) => !done.has(`${c.alertKey}#${c.milestone}`)).sort((a, b) => a.days - b.days);
   if (!due.length) return { sent: 0 };
-  const line = await sendLine(buildExpiryFlex(due, settings), settings);
+  const exFlex = buildExpiryFlex(due, settings);
+  const [line0, moph] = await Promise.all([sendLine(exFlex, settings), sendMoph(exFlex, settings, "expiry")]);
+  const line = { ...line0, ok: line0.ok || moph.ok };   // ส่งทางใดทางหนึ่งได้ = ถือว่าแจ้งรอบนี้แล้ว
   // บันทึกว่าส่งแล้ว (รวมรอบที่ใหญ่กว่าด้วย เพื่อไม่ส่งย้อนหลัง เช่น ยาที่เพิ่งเพิ่มเข้ากล่องตอนเหลือ 10 วัน จะได้แจ้งรอบ 15 ครั้งเดียว)
   if (line.ok) {
     const rows = due.flatMap((c) => ms.filter((x) => x >= c.milestone).map((x) => ({ alertKey: c.alertKey, milestone: x, boxCode: c.boxCode, drugName: c.drugName, expiryDate: c.expiryDate, lineOk: true })));
@@ -1548,7 +1560,9 @@ async function sendDailyDigest(force: boolean) {
   const expired = items.filter((i: any) => i.days < 0).length;
   // LINE โควตาฟรีมีจำกัด (นับตามจำนวนผู้รับ) → สรุปรายวันส่ง LINE เฉพาะเมื่อเปิดใช้ หรือกดส่งเอง
   const useLine = force || String(settings.LINE_DAILY_DIGEST || "0") === "1";
-  const line = useLine ? await sendLine(buildDigestFlex(items, overdue, settings), settings) : { ok: false, skipped: true, message: "สรุปรายวันส่งผ่าน Push เท่านั้น" };
+  const dgFlex = buildDigestFlex(items, overdue, settings);
+  const line = useLine ? await sendLine(dgFlex, settings) : { ok: false, skipped: true, message: "สรุปรายวันส่งผ่าน Push เท่านั้น" };
+  await sendMoph(dgFlex, settings, force ? "test" : "daily");
   const push = await pushWithNotice({
     kind: "daily", title: "สรุปกล่องยาฉุกเฉินประจำวัน", link: "boxes",
     body: `หมดอายุ ${expired} · ใกล้หมดอายุ ${items.length - expired} · เลยวันตรวจ ${overdue.length} กล่อง`,
@@ -1704,6 +1718,29 @@ async function sendLine(message: any, settings: any) {
     return { ok: okCount > 0, at: firstAt, sent: okCount, failed: ids.length - okCount, message: okCount ? `ส่ง LINE สำเร็จ ${okCount} รายการ` : lastErr };
   } catch (e: any) {
     return { ok: false, message: `เชื่อมต่อ LINE ไม่ได้: ${e?.message || e}` };
+  }
+}
+
+// ---------- หมอพร้อม (MOPH Notify) → กลุ่ม LINE ----------
+// POST https://morpromt2f.moph.go.th/api/notify/send · header client-key / secret-key · body { messages: [LINE message] }
+// สำเร็จเมื่อ HTTP 2xx และ message_code = 200 · ไม่นับโควตา LINE OA ของโรงพยาบาล
+const MOPH_URL_DEFAULT = "https://morpromt2f.moph.go.th/api/notify/send";
+async function sendMoph(message: any, settings: any, kind: string) {
+  if (String(settings.MOPH_ENABLED || "0") !== "1") return { ok: false, skipped: true, message: "ปิดการส่งหมอพร้อม" };
+  const kinds = String(settings.MOPH_KINDS ?? "open,escalate,expiry").split(",").map((x) => x.trim());
+  if (kind !== "test" && !kinds.includes(kind)) return { ok: false, skipped: true, message: `ไม่ได้เลือกส่ง ${kind} เข้าหมอพร้อม` };
+  const ck = String(settings.MOPH_CLIENT_KEY || "").trim(), sk = String(settings.MOPH_SECRET_KEY || "").trim();
+  if (!ck || !sk) return { ok: false, skipped: true, message: "ยังไม่ได้ตั้งค่า Client Key / Secret Key ของหมอพร้อม" };
+  let url = String(settings.MOPH_URL || MOPH_URL_DEFAULT).trim();
+  try { const u = new URL(url); if (u.protocol !== "https:" || !/(^|\.)moph\.go\.th$/.test(u.hostname)) url = MOPH_URL_DEFAULT; } catch { url = MOPH_URL_DEFAULT; }
+  try {
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "client-key": ck, "secret-key": sk }, body: JSON.stringify({ messages: [message] }) });
+    const text = await res.text();
+    let j: any = null; try { j = JSON.parse(text); } catch { /* ไม่ใช่ JSON */ }
+    const ok = res.ok && Number(j?.message_code) === 200;
+    return { ok, at: ok ? nowIso() : "", status: res.status, message: ok ? "ส่งเข้ากลุ่ม LINE (หมอพร้อม) สำเร็จ" : `หมอพร้อม ${res.status}${j?.message_code ? `/${j.message_code}` : ""}: ${(j?.message || text || "").toString().slice(0, 200)}` };
+  } catch (e: any) {
+    return { ok: false, message: `เชื่อมต่อหมอพร้อมไม่ได้: ${e?.message || e}` };
   }
 }
 

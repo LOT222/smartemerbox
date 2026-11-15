@@ -1160,7 +1160,23 @@
     } else if (t === "options") {
       body = `<div class="card card-pad"><h3>รายการตัวเลือก</h3><div class="muted small mt-4">ข้อความที่ผู้ใช้เลือกแทนการพิมพ์ เพิ่ม ลบ แก้ หรือสลับลำดับได้เอง การแก้ไขไม่กระทบข้อมูลที่บันทึกไปแล้ว</div></div>${optionsTab()}`;
     } else if (t === "notify") {
-      body = `<div class="card card-pad"><h3>LINE Messaging API</h3><div class="muted small mt-4">ช่องทางหลักที่ใช้นับ notification_sent_at ตามนิยาม 5.7.4 · ข้อความไม่แสดง HN</div><div class="form-grid mt-16">
+      const mk = String(s.MOPH_KINDS ?? "open,escalate,expiry").split(",").map((x) => x.trim());
+      const mkBox = (k, l) => `<label class="row gap-8 small" style="cursor:pointer"><input type="checkbox" data-mk="${k}" ${mk.includes(k) ? "checked" : ""} onchange="App.mophKinds()"> ${l}</label>`;
+      body = `<div class="card card-pad"><div class="row between wrap gap-8"><div><h3>หมอพร้อม (MOPH Notify) → กลุ่ม LINE</h3><div class="muted small mt-4">ส่งการ์ดแจ้งเตือนเข้ากลุ่ม LINE ผ่านบอทหมอพร้อม · <b>ไม่ใช้โควตา LINE OA</b> ของโรงพยาบาล · ข้อความไม่แสดง HN</div></div>
+          <span class="pill ${s.MOPH_ENABLED === "1" && s.MOPH_KEYS_SET ? "ok" : "plain"}">${s.MOPH_ENABLED === "1" && s.MOPH_KEYS_SET ? "เปิดใช้งาน" : s.MOPH_KEYS_SET ? "ตั้งค่า key แล้ว · ยังปิดอยู่" : "ยังไม่ได้ตั้งค่า"}</span></div>
+        <div class="form-grid mt-16">
+          ${field("การส่งเข้ากลุ่ม", `<select class="input" data-s="MOPH_ENABLED">${opt([["0", "ปิด"], ["1", "เปิด · ส่งเข้ากลุ่ม LINE"]], s.MOPH_ENABLED || "0")}</select>`)}
+          <div></div>
+          ${field("Client Key (Client_ID)", `<input class="input" data-s="MOPH_CLIENT_KEY" type="password" autocomplete="off" placeholder="${s.MOPH_KEYS_SET ? `ตั้งค่าแล้ว${s.MOPH_CLIENT_HINT ? ` (${esc(s.MOPH_CLIENT_HINT)})` : ""} · เว้นว่างถ้าไม่เปลี่ยน` : "วาง Client_ID"}">`)}
+          ${field("Secret Key (Secret)", `<input class="input" data-s="MOPH_SECRET_KEY" type="password" autocomplete="off" placeholder="${s.MOPH_KEYS_SET ? "ตั้งค่าแล้ว · เว้นว่างถ้าไม่เปลี่ยน" : "วาง Secret"}">`, "เก็บในฐานข้อมูลฝั่งเซิร์ฟเวอร์ ไม่ส่งกลับมาที่หน้าเว็บ")}
+          ${field("ส่งเรื่องไหนเข้ากลุ่ม", `<div class="col gap-8 mt-4">${mkBox("open", "เปิดกล่องยาฉุกเฉิน")}${mkBox("escalate", "แจ้งซ้ำเมื่อยังไม่มีผู้รับทราบ")}${mkBox("expiry", "ยาใกล้หมดอายุตามรอบวัน (30/15/7)")}${mkBox("daily", "สรุปภาพรวมรายวัน 08:00 น.")}</div><input type="hidden" data-s="MOPH_KINDS" value="${esc(mk.join(","))}">`, "", "full")}
+        </div>
+        <details class="mt-12"><summary class="small" style="cursor:pointer"><b>วิธีขอ Client_ID / Secret</b></summary><ol class="small muted mt-8" style="padding-left:18px;line-height:1.8">
+          <li>สร้างกลุ่ม LINE และตั้งชื่อกลุ่มก่อน แล้วเชิญบัญชี LINE <b>หมอพร้อม</b> เข้ากลุ่ม</li>
+          <li>Admin หน่วยบริการเข้า CMS MOPH Notify → <b>กลุ่มบอท</b> → จัดการ → <b>อนุมัติ</b> กลุ่มนั้น</li>
+          <li>กดรูปตาที่ช่อง API Key ของกลุ่ม แล้วคัดลอก Client_ID / Secret มาวางที่นี่ → บันทึก → กด "ทดสอบส่ง"</li></ol></details>
+        <div class="row wrap mt-16" style="justify-content:flex-end"><button class="btn" onclick="App.testNotify()">${ic("send")} ทดสอบส่ง</button><button class="btn primary" onclick="App.saveSettings()">บันทึก</button></div></div>
+        <div class="card card-pad mt-16"><h3>LINE Messaging API</h3><div class="muted small mt-4">ช่องทางหลักที่ใช้นับ notification_sent_at ตามนิยาม 5.7.4 · ข้อความไม่แสดง HN</div><div class="form-grid mt-16">
         ${field("Channel access token", `<input class="input" data-s="LINE_CHANNEL_ACCESS_TOKEN" type="password" placeholder="${s.LINE_TOKEN_SET ? "ตั้งค่าแล้ว · เว้นว่างถ้าไม่เปลี่ยน" : "วาง token ที่นี่"}">`, s.LINE_TOKEN_SET ? "✓ ตั้งค่าแล้ว" : "")}
         ${field("โหมดการส่ง", `<select class="input" data-s="LINE_SEND_MODE">${opt([["broadcast", "Broadcast (ทุกคนที่เพิ่มเพื่อน)"], ["push", "Push (ระบุกลุ่ม/ผู้ใช้)"]], s.LINE_SEND_MODE || "broadcast")}</select>`)}
         ${field("แจ้งยาใกล้หมดอายุทาง LINE ตามรอบวัน", `<select class="input" data-s="LINE_EXPIRY_ALERTS">${opt([["1", "เปิด · ส่งเมื่อยาถึงรอบที่กำหนด (ครั้งเดียวต่อรอบ)"], ["0", "ปิด"]], s.LINE_EXPIRY_ALERTS ?? "1")}</select>`, "ส่งเวลา 08:00 น. เฉพาะวันที่มียาถึงรอบ ยาเดียวกันจะไม่ถูกแจ้งซ้ำในรอบเดิม")}
@@ -1215,10 +1231,14 @@
     const r = await api("apiSaveSettings", S.token, p);
     S.data = r.data; toast("บันทึกตั้งค่าแล้ว"); App.render();
   });
+  App.mophKinds = () => { const h = document.querySelector('[data-s="MOPH_KINDS"]'); if (h) h.value = $$("[data-mk]").filter((x) => x.checked).map((x) => x.dataset.mk).join(","); };
   App.testNotify = async () => {
     try {
       const r = await api("apiTestNotify", S.token);
-      toast(`LINE: ${r.line.ok ? "สำเร็จ" : r.line.message} · Push: ${r.push.sent || 0} เครื่อง`, !r.line.ok && !r.push.sent);
+      const m = r.moph || { skipped: true };
+      const msg = [`LINE OA: ${r.line.ok ? "สำเร็จ" : r.line.message}`, `หมอพร้อม: ${m.ok ? "สำเร็จ" : m.skipped ? "ไม่ได้เปิด" : m.message}`, `Push: ${r.push.sent || 0} เครื่อง`].join(" · ");
+      toast(msg, !r.line.ok && !m.ok && !r.push.sent);
+      if (m.ok === false && !m.skipped) dialog({ title: "ส่งเข้ากลุ่มหมอพร้อมไม่สำเร็จ", body: `${esc(m.message || "")}\n\nตรวจว่า กลุ่มได้รับการอนุมัติใน CMS MOPH Notify แล้ว และ Client_ID / Secret ถูกต้อง`, confirm: "ตกลง", cancel: "" });
     } catch (e) { fail(e); }
   };
   App.lineQuota = async () => {
