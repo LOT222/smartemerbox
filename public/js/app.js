@@ -5,6 +5,7 @@
   const { S, api, esc, ic, $, toast, fail, renderShell, renderNav, setTitle, TITLES, LOGO, DEMO, IDLE_MS, Q } = window.SEB;
   const App = (window.App = window.App || {});
   let refreshTimer = null;
+  let swListening = false;
 
   App.boot = async function () {
     registerSW();
@@ -126,6 +127,7 @@
   function enterApp() {
     renderShell();
     const hash = location.hash.replace(/^#\/?/, "");
+    if (S.pendingNotice) { App.markNoticeRead?.(S.pendingNotice); S.pendingNotice = ""; }
     if (S.pendingCase) { App.go("case", S.pendingCase); S.pendingCase = ""; try { history.replaceState(null, "", location.pathname + (DEMO ? "?demo=1" : "")); } catch (_) {} }
     else if (hash) { const [v, p] = hash.split("/"); App.go(v || "dashboard", p || "", true); }
     else App.go("dashboard");
@@ -133,7 +135,13 @@
     startIdleWatch();
     App.checkPdpa();
     App.loadConsentStatus().then(() => { if (S.view === "dashboard") App.render(); });
-    if (!S.demo) navigator.serviceWorker?.addEventListener("message", (ev) => { if (ev.data?.type === "push") App.refresh(true); });
+    if (!S.demo && !swListening) {
+      swListening = true;
+      navigator.serviceWorker?.addEventListener("message", (ev) => {
+        if (ev.data?.type === "push") { App.refresh(true); App.reloadNotices?.(); }
+        if (ev.data?.type === "open" && S.user) App.openFromPush(ev.data.url, ev.data.nid);
+      });
+    }
   }
 
   // ---------------- routing ----------------
@@ -193,7 +201,7 @@
     const map = {
       dashboard: App.pageDashboard, cases: App.pageCases, case: App.pageCase, boxes: App.pageBoxes, box: App.pageBox,
       inspections: App.pageInspections, inspect: App.pageInspect, kits: App.pageKits, locations: App.pageLocations,
-      research: App.pageResearch, stats: App.pageStats, consent: App.pageConsent, consentAdmin: App.pageConsentAdmin, logs: App.pageLogs, users: App.pageUsers, settings: App.pageSettings, more: App.pageMore,
+      research: App.pageResearch, stats: App.pageStats, inbox: App.pageInbox, consent: App.pageConsent, consentAdmin: App.pageConsentAdmin, logs: App.pageLogs, users: App.pageUsers, settings: App.pageSettings, more: App.pageMore,
     };
     try { window.SEB.syncLists(); } catch (e) {}
     try { window.SEB.renderBanner(); } catch (e) {}
@@ -210,6 +218,7 @@
       renderNav();
       try { window.SEB.renderBanner(); } catch (e) {}
       if (["dashboard", "cases", "boxes"].includes(S.view) && !document.getElementById("drawer")) App.render();
+      if ((res.data.unreadNotices || 0) !== (S.noticeUnreadSeen ?? -1)) { S.noticeUnreadSeen = res.data.unreadNotices || 0; App.reloadNotices?.(); }
       if ((res.data.stats.openCases || 0) > prevPending && silent) toast("มีการเปิดกล่องยาใหม่");
     } catch (e) { if (!silent) fail(e); }
   };
@@ -245,14 +254,16 @@
     const reg = await navigator.serviceWorker.getRegistration();
     return reg ? reg.pushManager.getSubscription() : null;
   };
+  // กระดิ่งมุมขวาบน = กล่องแจ้งเตือน (ตัวเลข = ยังไม่อ่าน) · จุดเทา = เครื่องนี้ยังไม่ได้เปิดรับ Push
   App.updateBell = async function () {
     const b = $("#bellBtn");
     if (!b) return;
+    const n = S.data?.unreadNotices || 0;
     let on = false;
     try { on = DEMO ? localStorage.getItem("seb_demo_push") === "1" : !!(await App.currentSubscription()); } catch (_) {}
-    b.innerHTML = ic(on ? "bell-ringing" : "bell-off");
-    b.title = on ? "เครื่องนี้รับแจ้งเตือนอยู่" : "เครื่องนี้ยังไม่รับแจ้งเตือน";
-    b.style.color = on ? "var(--ok-text)" : "var(--text-3)";
+    b.innerHTML = `${ic(n ? "bell-ringing" : "bell")}${n ? `<span class="bell-count">${n > 99 ? "99+" : n}</span>` : on ? "" : `<span class="bell-off-dot" title="เครื่องนี้ยังไม่รับแจ้งเตือน"></span>`}`;
+    b.title = (n ? `ยังไม่อ่าน ${n} รายการ` : "การแจ้งเตือน") + (on ? "" : " · เครื่องนี้ยังไม่เปิดรับแจ้งเตือน");
+    b.classList.toggle("has-unread", !!n);
   };
   App.enablePush = async function () {
     const sup = App.pushSupport();

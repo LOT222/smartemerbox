@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.14.1";
+  const APP_VERSION = "2.15.0";
 
   const S = {
     demo: DEMO,
@@ -35,6 +35,8 @@
     inspections: null,
     users: null,
     pendingCase: Q.get("case") || "",
+    pendingNotice: Q.get("n") || "",
+    notices: null,
     zone: "all",
     lastActivity: Date.now(),
     installPrompt: null,
@@ -42,7 +44,7 @@
 
   // ---------------- API ----------------
   // โหมดจำลองบทบาท (ผู้ดูแลดูหน้าตาบทบาทอื่น): อ่านได้อย่างเดียว ห้ามบันทึก/แก้ไขใด ๆ
-  const SIM_READ = new Set(["apiBootstrap", "apiRefresh", "apiGetEvent", "apiListInspections", "apiGetInspection", "apiListLogs", "apiMonthlyReport", "apiReport", "apiConsentStatus", "apiListConsents", "apiGetConsent", "apiLineQuota", "apiPublicGetBox", "apiPublicConfig", "apiHealth", "apiFlexPreview", "apiListAccountRequests", "apiResearchData", "apiLogout"]);
+  const SIM_READ = new Set(["apiBootstrap", "apiRefresh", "apiGetEvent", "apiListInspections", "apiGetInspection", "apiListLogs", "apiMonthlyReport", "apiReport", "apiConsentStatus", "apiListConsents", "apiGetConsent", "apiLineQuota", "apiPublicGetBox", "apiPublicConfig", "apiHealth", "apiFlexPreview", "apiListAccountRequests", "apiResearchData", "apiLogout", "apiListNotifications"]);
   async function api(name, ...args) {
     if (S.sim && !SIM_READ.has(name)) {
       const e = new Error(`โหมดจำลองบทบาท "${ROLE[S.sim] || S.sim}" ดูได้อย่างเดียว · กด "กลับเป็นผู้ดูแลระบบ" เพื่อบันทึกหรือแก้ไข`);
@@ -282,6 +284,7 @@
   // ---------------- shell ----------------
   const NAV = [
     { id: "dashboard", color: "#e11d48", label: "ภาพรวม", icon: "layout-dashboard" },
+    { id: "inbox", color: "#db2777", label: "การแจ้งเตือน", icon: "bell", badge: () => S.data?.unreadNotices || 0 },
     { id: "cases", color: "#ea580c", label: "เคสเปิดกล่อง", icon: "urgent", badge: () => S.data?.stats?.pendingCases || 0 },
     { id: "boxes", color: "#0e9f6e", label: "กล่องยา", icon: "first-aid-kit" },
     { id: "inspections", color: "#2563eb", label: "ตรวจประจำเดือน", icon: "clipboard-check" },
@@ -308,7 +311,7 @@
   const TITLES = {
     dashboard: "ภาพรวม", cases: "เคสเปิดกล่อง", case: "รายละเอียดเคส", boxes: "กล่องยา", box: "กล่องยา",
     inspections: "ตรวจประจำเดือน", inspect: "ตรวจกล่องยา", kits: "ชุดยามาตรฐาน", locations: "จุดวางกล่อง",
-    research: "งานวิจัย", stats: "สถิติ", consent: "เอกสารยินยอมวิจัย", consentAdmin: "รับเอกสารยินยอม", logs: "ประวัติการใช้งาน", users: "ผู้ใช้งาน", settings: "ตั้งค่า", more: "เมนู",
+    research: "งานวิจัย", stats: "สถิติ", inbox: "การแจ้งเตือน", consent: "เอกสารยินยอมวิจัย", consentAdmin: "รับเอกสารยินยอม", logs: "ประวัติการใช้งาน", users: "ผู้ใช้งาน", settings: "ตั้งค่า", more: "เมนู",
   };
 
   function renderShell() {
@@ -330,7 +333,7 @@
         <header class="topbar" id="topbar">
           <div class="grow" style="min-width:0"><div class="crumb mobile-only">${esc(s.HOSPITAL_NAME || "")}</div><h1 id="pageTitle"></h1></div>
           <div class="row" id="pageActions"></div>
-          <button class="btn ghost icon" id="bellBtn" onclick="App.go('settings','device')" title="การแจ้งเตือนเครื่องนี้">${ic("bell")}</button>
+          <button class="btn ghost icon bell-btn" id="bellBtn" onclick="App.toggleInbox(event)" title="การแจ้งเตือน" aria-label="การแจ้งเตือน">${ic("bell")}</button>
         </header>
         <div id="sysBanner"></div>
         <main class="content" id="content"></main>
@@ -352,6 +355,7 @@
       `<button class="nav-item ${S.view === n.id || (S.view === "case" && n.id === "cases") || (S.view === "box" && n.id === "boxes") || (S.view === "inspect" && n.id === "inspections") ? "active" : ""}" onclick="App.go('${n.id}')" style="--nc:${n.color || "currentColor"}">${ic(n.icon)}<span>${n.label}</span>${n.badge && n.badge() ? `<span class="count">${n.badge()}</span>` : ""}</button>`).join("");
     const pend = S.data?.stats?.pendingCases || 0;
     const tb = $("#tabbar");
+    try { App.updateBell(); } catch (_) {}
     if (tb) tb.innerHTML = TABS.map((t) => `<button class="tab ${S.view === t.id || (t.id === "cases" && S.view === "case") || (t.id === "boxes" && S.view === "box") || (t.id === "inspections" && S.view === "inspect") ? "active" : ""}" onclick="App.go('${t.id}')" style="--nc:${t.color}">${ic(t.icon)}<span>${t.label}</span>${t.id === "cases" && pend ? `<span class="dot"></span>` : ""}</button>`).join("");
   }
 

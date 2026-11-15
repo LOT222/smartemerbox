@@ -1,8 +1,8 @@
 /* SEB v2 service worker — app shell cache + Web Push */
-const VERSION = "seb-v2.14.1-1";
+const VERSION = "seb-v2.15.0-1";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./config.js", "./manifest.webmanifest",
-  "./vendor/qrcode.js", "./vendor/fonts.css", "./vendor/icons.css", "./js/consent-text.js", "./js/core.js", "./js/consent.js", "./js/app.js", "./js/pages.js", "./js/print.js", "./js/stats.js", "./js/research.js", "./js/public.js",
+  "./vendor/qrcode.js", "./vendor/fonts.css", "./vendor/icons.css", "./js/consent-text.js", "./js/core.js", "./js/consent.js", "./js/app.js", "./js/pages.js", "./js/print.js", "./js/stats.js", "./js/research.js", "./js/public.js", "./js/inbox.js",
   "./icons/icon-192.png", "./icons/hospital-logo-96.png", "./icons/seb-logo-256.png", "./icons/hospital-logo-256.png", "./icons/icon-512.png", "./icons/badge-72.png",
 ];
 
@@ -47,7 +47,7 @@ self.addEventListener("push", (e) => {
     icon: "./icons/icon-192.png",
     badge: "./icons/badge-72.png",
     vibrate: p.urgent ? [300, 120, 300, 120, 300] : [120],
-    data: { url: p.url || "./" },
+    data: { url: p.url || "./", nid: p.nid || "" },
     timestamp: Date.now(),
   };
   e.waitUntil(
@@ -57,13 +57,18 @@ self.addEventListener("push", (e) => {
   );
 });
 
+// กดแจ้งเตือน → เปิดแอปไปที่รายการนั้นในกล่องแจ้งเตือน (หรือหน้าเคส) ไม่ใช่แค่ปิดแจ้งเตือนทิ้ง
+// ถ้าแอปเปิดอยู่แล้ว: ส่งข้อความให้หน้าเว็บเปลี่ยนหน้าเอง (iPhone ไม่รองรับ client.navigate)
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
   const target = new URL(e.notification.data?.url || "./", self.registration.scope).href;
   e.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((cs) => {
       for (const c of cs) {
-        if (c.url.startsWith(self.registration.scope)) { c.navigate(target).catch(() => null); return c.focus(); }
+        if (c.url.startsWith(self.registration.scope)) {
+          c.postMessage({ type: "open", url: target, nid: e.notification.data?.nid || "" });
+          return c.focus().catch(() => null);
+        }
       }
       return self.clients.openWindow(target);
     }),

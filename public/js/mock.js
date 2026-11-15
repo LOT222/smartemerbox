@@ -151,10 +151,35 @@
     const by = (s) => full.filter((b) => b.state === s).length;
     return {
       settings: { ...settings }, locations: locations.map((l) => ({ ...l })), kits: kits.map((k) => ({ ...k, items: k.items.map((i) => ({ ...i })) })), boxes: full,
-      events: events.slice(0, 400).map((e) => ({ ...e })), pushDevices: 4, pushReady: true, me: session, pendingRequests: session?.role === "admin" ? requests.filter((r) => r.status === "pending").length : 0,
+      events: events.slice(0, 400).map((e) => ({ ...e })), pushDevices: 4, pushReady: true, me: session, unreadNotices: session ? demoUnread() : 0, pendingRequests: session?.role === "admin" ? requests.filter((r) => r.status === "pending").length : 0,
       stats: { totalBoxes: full.length, ready: by("ready"), opened: by("opened") + by("refilling"), notReady: by("not_ready") + by("expired"), expiredItems: full.reduce((a, b) => a + b.expiredCount, 0), nearItems: full.reduce((a, b) => a + b.nearCount, 0), overdueInspections: full.filter((b) => b.inspectionOverdue).length, openCases: events.filter((e) => e.caseStatus === "open").length, pendingCases: events.filter((e) => ["open", "acknowledged"].includes(e.caseStatus)).length, medianResponseMin: med, responseTargetMin: 5 },
     };
   }
+  // ---------- กล่องแจ้งเตือน (ตัวอย่าง) ----------
+  const noticeReads = {};
+  let noticeCache = null;
+  function demoNotices() {
+    if (noticeCache) return noticeCache;
+    const full = boxes.map(decorate);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const items = full.flatMap((b) => b.items.map((it) => ({ boxId: b.id, boxCode: b.boxCode, location: b.location, drugName: it.drugName, strength: it.strength || "", lot: it.lot || "", expiryDate: it.expiryDate, days: Math.round((new Date(it.expiryDate + "T00:00:00") - today) / 86400000) })))
+      .filter((it) => it.expiryDate && it.days <= Number(settings.NEAR_EXPIRY_DAYS || 30)).sort((a, b) => a.days - b.days);
+    const exp = items.filter((i) => i.days < 0).length;
+    const over = full.filter((b) => b.inspectionOverdue).map((b) => ({ boxId: b.id, boxCode: b.boxCode, location: b.location, inspectionDate: b.inspectionDate }));
+    const at = (h) => iso(now() - h * 3600000);
+    const ev = events.find((e) => e.caseStatus !== "cancelled");
+    const list = [
+      { id: "nt-daily-1", kind: "daily", title: "สรุปกล่องยาฉุกเฉินประจำวัน", body: `หมดอายุ ${exp} · ใกล้หมดอายุ ${items.length - exp} · เลยวันตรวจ ${over.length} กล่อง`, link: "boxes", createdAt: at(0.7), detail: { expired: exp, near: items.length - exp, overdueCount: over.length, nearDays: settings.NEAR_EXPIRY_DAYS || 30, items, total: items.length, overdue: over } },
+      ...(ev ? [{ id: "nt-case-1", kind: "case", title: `เปิดกล่องยาฉุกเฉิน · ${ev.boxCode}`, body: `${ev.locationName} · ${ev.reasonCategory || "ไม่ระบุเหตุผล"}`, link: `case/${ev.id}`, createdAt: at(1.2), detail: { eventId: ev.id, eventCode: ev.eventCode, boxCode: ev.boxCode, location: ev.locationName, reason: ev.reasonCategory, openedAt: ev.actualOpenedAt } }] : []),
+      { id: "nt-exp-1", kind: "expiry", title: "ยาใกล้หมดอายุ", body: items.slice(0, 3).map((c) => `${c.drugName} · ${c.boxCode} (${c.days} วัน)`).join(" / "), link: "boxes", createdAt: at(24.7), detail: { items: items.filter((i) => i.days >= 0).slice(0, 5), total: Math.min(5, items.filter((i) => i.days >= 0).length) } },
+      { id: "nt-daily-0", kind: "daily", title: "สรุปกล่องยาฉุกเฉินประจำวัน", body: `หมดอายุ ${exp} · ใกล้หมดอายุ ${items.length - exp} · เลยวันตรวจ ${over.length} กล่อง`, link: "boxes", createdAt: at(24.8), detail: { expired: exp, near: items.length - exp, overdueCount: over.length, nearDays: 30, items, total: items.length, overdue: over } },
+      { id: "nt-test-1", kind: "test", title: "ทดสอบการแจ้งเตือน SEB", body: "ส่งโดย ผู้ดูแลระบบ", link: "settings/device", createdAt: at(50) },
+    ];
+    noticeReads["nt-daily-0"] = at(24); noticeReads["nt-test-1"] = at(49);
+    return (noticeCache = list);
+  }
+  const demoUnread = () => demoNotices().filter((n) => !noticeReads[n.id]).length;
+
   const audit = (action, detailJson = {}) => auditLogs.unshift({ id: id("au"), at: iso(now()), username: session?.username || "QR", action, detailJson });
   const need = (tok) => { if (!session || tok !== "demo-token") throw new Error("SESSION_EXPIRED:กรุณาเข้าสู่ระบบใหม่"); return session; };
   const err = (m) => { throw new Error(m); };
@@ -253,6 +278,8 @@
     apiFlexPreview: (t) => { need(t); return JSON.parse(JSON.stringify(FLEX_SAMPLE)); },
     apiTestNotify: (t) => { need(t); return { line: { ok: true, message: "ส่ง LINE สำเร็จ" }, push: { sent: 4, failed: 0 } }; },
     apiSendExpiryReport: (t) => { need(t); return { items: appData().stats.expiredItems + appData().stats.nearItems }; },
+    apiListNotifications: (t, o = {}) => { need(t); const all = demoNotices(); const it = o.before ? all.filter((n) => n.createdAt < o.before) : all; return { items: it.slice(0, o.limit || 50).map((n) => ({ ...n, readAt: noticeReads[n.id] || null })), unread: demoUnread(), more: false }; },
+    apiMarkNotificationsRead: (t, ids) => { need(t); (ids === "all" ? demoNotices().map((n) => n.id) : [].concat(ids)).forEach((i) => (noticeReads[i] = noticeReads[i] || iso(now()))); return { ok: true, unread: demoUnread() }; },
     apiSavePushSubscription: () => ({ ok: true }),
     apiRemovePushSubscription: () => ({ ok: true }),
     apiExportResearch: (t) => {

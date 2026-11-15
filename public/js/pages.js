@@ -1243,6 +1243,7 @@
     // ปุ่มทางลัดแบบตาราง (สิทธิ์ตามบทบาทเหมือนเดิม)
     const T = [
       ["dashboard", "ภาพรวม", "layout-dashboard", "#e11d48"],
+      ["inbox", "การแจ้งเตือน", "bell", "#db2777"],
       ["cases", "เคสเปิดกล่อง", "urgent", "#ea580c"],
       ["boxes", "กล่องยา", "first-aid-kit", "#0e9f6e"],
       ["inspections", "ตรวจประจำเดือน", "clipboard-check", "#2563eb"],
@@ -1256,7 +1257,7 @@
       ...(isAdmin() ? [["users", "ผู้ใช้งาน", "users", "#d97706"]] : []),
       ["settings", "ตั้งค่า", "settings", "#475569"],
     ];
-    const badge = (id) => { const n = id === "cases" ? D().stats?.pendingCases || 0 : id === "users" ? D().pendingRequests || 0 : 0; return n ? `<span class="mt-badge">${n}</span>` : ""; };
+    const badge = (id) => { const n = id === "cases" ? D().stats?.pendingCases || 0 : id === "users" ? D().pendingRequests || 0 : id === "inbox" ? D().unreadNotices || 0 : 0; return n ? `<span class="mt-badge">${n}</span>` : ""; };
     $("#content").innerHTML = `
       <div class="more-grid">${T.map(([id, l, i, c]) => `<button class="more-tile" style="--mc:${c}" onclick="App.go('${id}')"><span class="mt-ic">${ic(i)}${badge(id)}</span><span class="mt-l">${l}</span></button>`).join("")}</div>
       <div class="card card-pad mt-16 more-me">

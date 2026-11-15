@@ -7,8 +7,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.14.0";
-const SCHEMA_REQUIRED = 6; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
+const APP_VERSION = "2.15.0";
+const SCHEMA_REQUIRED = 7; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -138,6 +138,8 @@ const actions: Record<string, Fn> = {
   apiFlexPreview,
   apiSavePushSubscription,
   apiRemovePushSubscription,
+  apiListNotifications,
+  apiMarkNotificationsRead,
   apiSendExpiryReport,
   apiMonthlyReport,
   apiReport,
@@ -167,9 +169,11 @@ async function defaultPassword() { const s = await settingsObject(); return Stri
 async function notifyAdmins(title: string, body: string) {
   const { data: admins } = await db.from("users").select("id").eq("role", "admin").eq("active", true);
   const ids = (admins || []).map((a: any) => a.id);
+  const nid = await recordNotice({ kind: "account", title, body, link: "users", audience: "admin" });
   if (!ids.length || !VAPID_PUBLIC_KEY) return;
   const { data: subs } = await db.from("pushSubscriptions").select("*").eq("active", true).in("userId", ids);
-  await Promise.all((subs || []).map((s: any) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ title, body, tag: "account", url: `${appUrl()}#/users` }), { TTL: 86400 }).catch(() => null)));
+  const url = nid ? noticeUrl(nid) : `${appUrl()}#/users`;
+  await Promise.all((subs || []).map((s: any) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ title, body, tag: "account", url, nid }), { TTL: 86400 }).catch(() => null)));
 }
 
 async function apiRegister(_c: Ctx, p: any) {
@@ -517,6 +521,7 @@ async function buildAppData(user: any) {
     pushDevices: subCount,
     pushReady: !!VAPID_PUBLIC_KEY,
     pendingRequests: user?.role === "admin" ? await db.from("accountRequests").select("id", { count: "exact", head: true }).eq("status", "pending").then((r: any) => r.count || 0) : 0,
+    unreadNotices: user ? await unreadNoticeCount(user) : 0,
     me: publicUser(user),
   };
 }
@@ -729,9 +734,14 @@ async function notifyOpen(event: any, box: any, settings: any, escalation = fals
   const bodyText = `${event.locationName || box.location || "-"} · ${event.reasonCategory || "ไม่ระบุเหตุผล"} · ${fmtTime(event.actualOpenedAt)} น.`;
   // แจ้งซ้ำ: ค่าตั้งต้นส่ง Push อย่างเดียว เพื่อประหยัดโควตา LINE (LINE_ESCALATE=1 = ส่ง LINE ด้วย)
   const lineOnEscalate = String(settings.LINE_ESCALATE || "0") === "1";
+  const nid = await recordNotice({
+    kind: escalation ? "escalate" : "case", title, body: bodyText, link: `case/${event.id}`,
+    detail: { eventId: event.id, eventCode: event.eventCode, boxCode: box.boxCode, location: event.locationName || box.location || "", reason: event.reasonCategory || "", openedAt: event.actualOpenedAt },
+  });
   const [line, push] = await Promise.all([
     escalation && !lineOnEscalate ? Promise.resolve({ ok: false, skipped: true } as any) : sendLine(buildOpenFlex(event, box, settings, escalation), settings),
-    sendPushAll({ title, body: bodyText, tag: `case-${event.id}`, url: `${appUrl()}?case=${event.id}`, urgent: true }),
+    // กดแจ้งเตือนเคส → เปิดหน้าเคสโดยตรง (เร่งด่วน) และทำเครื่องหมายว่าอ่านแล้ว
+    sendPushAll({ title, body: bodyText, tag: `case-${event.id}`, url: `${appUrl()}?case=${event.id}${nid ? `&n=${nid}` : ""}`, nid, urgent: true }),
   ]);
   if (escalation) {
     return updateRow("openEvents", event.id, { escalatedAt: nowIso() });
@@ -1277,7 +1287,7 @@ async function apiSheetExport(_c: Ctx, key: string) {
 const BACKUP_TABLES: Record<string, string> = {
   settings: "key", users: "id", locations: "id", kits: "id", kitItems: "id", boxes: "id", boxItems: "id",
   openEvents: "id", eventPrivate: "eventId", stockMoves: "id", inspections: "id", inspectionItems: "id",
-  auditLogs: "id", loginLogs: "id", lineRecipients: "recipientId", pushSubscriptions: "id",
+  auditLogs: "id", loginLogs: "id", lineRecipients: "recipientId", pushSubscriptions: "id", notifications: "id",
   reportTimings: "id", baselineAggregates: "id", observations: "id", surveyResponses: "id", surveyV2: "id",
   userConsents: "id", accountRequests: "id", expiryAlerts: "alertKey", printJobs: "id",
 };
@@ -1405,7 +1415,7 @@ async function apiTestNotify(_c: Ctx, token: string) {
   const settings = await settingsObject();
   const [line, push] = await Promise.all([
     sendLine(buildTestFlex(settings), settings),
-    sendPushAll({ title: "ทดสอบการแจ้งเตือน SEB", body: `ส่งโดย ${user.displayName || user.username}`, tag: "test", url: appUrl() }),
+    pushWithNotice({ kind: "test", title: "ทดสอบการแจ้งเตือน SEB", body: `ส่งโดย ${user.displayName || user.username}`, link: "settings/device" }, { tag: "test" }),
   ]);
   return { line, push };
 }
@@ -1443,7 +1453,8 @@ async function apiCron(_c: Ctx, secret: string, kind: string) {
   if (kind === "daily") {
     const expiry = await sendExpiryMilestones();
     const digest = await sendDailyDigest(false);
-    return { expiry, digest };
+    const cleaned = await cleanupNotices();
+    return { expiry, digest, cleaned };
   }
   // tick: แจ้งเตือนซ้ำเมื่อไม่มีผู้รับทราบ
   const settings = await settingsObject();
@@ -1491,7 +1502,11 @@ async function sendExpiryMilestones() {
     const rows = due.flatMap((c) => ms.filter((x) => x >= c.milestone).map((x) => ({ alertKey: c.alertKey, milestone: x, boxCode: c.boxCode, drugName: c.drugName, expiryDate: c.expiryDate, lineOk: true })));
     for (let i = 0; i < rows.length; i += 500) await db.from("expiryAlerts").upsert(rows.slice(i, i + 500), { onConflict: "alertKey,milestone", ignoreDuplicates: true });
   }
-  await sendPushAll({ title: "ยาใกล้หมดอายุ", body: due.slice(0, 3).map((c) => `${c.drugName} · ${c.boxCode} (${c.days} วัน)`).join(" / ") + (due.length > 3 ? ` และอีก ${due.length - 3} รายการ` : ""), tag: "expiry", url: `${appUrl()}?view=boxes` });
+  await pushWithNotice({
+    kind: "expiry", title: "ยาใกล้หมดอายุ", link: "boxes",
+    body: due.slice(0, 3).map((c) => `${c.drugName} · ${c.boxCode} (${c.days} วัน)`).join(" / ") + (due.length > 3 ? ` และอีก ${due.length - 3} รายการ` : ""),
+    detail: { items: due.slice(0, 100).map(noticeItem), total: due.length },
+  }, { tag: "expiry" });
   return { sent: due.length, line };
 }
 function buildExpiryFlex(due: any[], settings: any) {
@@ -1534,12 +1549,110 @@ async function sendDailyDigest(force: boolean) {
   // LINE โควตาฟรีมีจำกัด (นับตามจำนวนผู้รับ) → สรุปรายวันส่ง LINE เฉพาะเมื่อเปิดใช้ หรือกดส่งเอง
   const useLine = force || String(settings.LINE_DAILY_DIGEST || "0") === "1";
   const line = useLine ? await sendLine(buildDigestFlex(items, overdue, settings), settings) : { ok: false, skipped: true, message: "สรุปรายวันส่งผ่าน Push เท่านั้น" };
-  const push = await sendPushAll({
-    title: "สรุปกล่องยาฉุกเฉินประจำวัน",
+  const push = await pushWithNotice({
+    kind: "daily", title: "สรุปกล่องยาฉุกเฉินประจำวัน", link: "boxes",
     body: `หมดอายุ ${expired} · ใกล้หมดอายุ ${items.length - expired} · เลยวันตรวจ ${overdue.length} กล่อง`,
-    tag: "daily", url: `${appUrl()}?view=boxes`,
-  });
+    detail: {
+      expired, near: items.length - expired, overdueCount: overdue.length, nearDays,
+      items: items.slice(0, 100).map(noticeItem), total: items.length,
+      overdue: overdue.slice(0, 50).map((b: any) => ({ boxId: b.id, boxCode: b.boxCode, location: b.location || "", inspectionDate: b.inspectionDate || "" })),
+    },
+  }, { tag: "daily" });
   return { items: items.length, overdue: overdue.length, line, push };
+}
+
+// =====================================================================
+// กล่องแจ้งเตือนในระบบ (Inbox) — เก็บสำเนาทุกแจ้งเตือน กดจาก Push แล้วเปิดมาที่รายการนั้น
+// ถ้ายังไม่ได้รัน migration 0007 ระบบยังส่ง Push ได้ตามเดิม (แค่ไม่มีสำเนาในกล่อง)
+// =====================================================================
+type Notice = { kind: string; title: string; body?: string; link?: string; detail?: any; audience?: "all" | "admin" };
+async function recordNotice(n: Notice): Promise<string | null> {
+  try {
+    const { data, error } = await db.from("notifications").insert({
+      kind: n.kind, title: n.title, body: n.body || "", link: n.link || "", detail: n.detail ?? null, audience: n.audience || "all",
+    }).select("id").single();
+    if (error) throw error;
+    return data?.id || null;
+  } catch (e) {
+    console.warn("recordNotice", (e as any)?.message || e);
+    return null;
+  }
+}
+function noticeUrl(nid: string) { return `${appUrl()}#/inbox/${nid}`; }
+function noticeItem(it: any) {
+  return { boxId: it.boxId || "", boxCode: it.boxCode || "", location: it.location || "", drugName: it.drugName || "", strength: it.strength || "", lot: it.lot || "", expiryDate: it.expiryDate || "", days: it.days, qty: it.qty ?? null };
+}
+async function pushWithNotice(n: Notice, extra: any = {}) {
+  const nid = await recordNotice(n);
+  const url = nid ? noticeUrl(nid) : `${appUrl()}${n.link ? `#/${n.link}` : ""}`;
+  return sendPushAll({ title: n.title, body: n.body || "", url, nid, ...extra });
+}
+function noticeAudience(user: any) { return user?.role === "admin" ? ["all", "admin"] : ["all"]; }
+async function unreadNoticeCount(user: any) {
+  try {
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    const { data: rows, error } = await db.from("notifications").select("id").in("audience", noticeAudience(user))
+      .gte("createdAt", since).order("createdAt", { ascending: false }).limit(200);
+    if (error) throw error;
+    const ids = (rows || []).map((r: any) => r.id);
+    if (!ids.length) return 0;
+    const { data: reads } = await db.from("notificationReads").select("notificationId").eq("userId", user.id).in("notificationId", ids);
+    return ids.length - (reads || []).length;
+  } catch (_) {
+    return 0;
+  }
+}
+async function apiListNotifications(_c: Ctx, token: string, opts: any = {}) {
+  const user = await requireAuth(token);
+  const limit = Math.min(Math.max(Number(opts.limit) || 50, 1), 200);
+  let q = db.from("notifications").select("*").in("audience", noticeAudience(user)).order("createdAt", { ascending: false }).limit(limit);
+  if (opts.before) q = q.lt("createdAt", opts.before);
+  const { data, error } = await q;
+  if (error) {
+    if (/does not exist|relation|schema cache/i.test(error.message)) return { items: [], unread: 0, missing: true };
+    throw error;
+  }
+  let items = data || [];
+  // เปิดจากลิงก์ของแจ้งเตือนที่เก่ากว่าหน้าแรก → ดึงรายการนั้นมาด้วย
+  if (opts.id && !items.some((r: any) => r.id === opts.id)) {
+    const extra = await one("notifications", (qq) => qq.eq("id", opts.id).in("audience", noticeAudience(user)));
+    if (extra) items = [...items, extra];
+  }
+  const ids = items.map((r: any) => r.id);
+  const { data: reads } = ids.length ? await db.from("notificationReads").select("notificationId,readAt").eq("userId", user.id).in("notificationId", ids) : { data: [] };
+  const readMap = new Map((reads || []).map((r: any) => [r.notificationId, r.readAt]));
+  return {
+    items: items.map((r: any) => ({ ...r, readAt: readMap.get(r.id) || null })),
+    unread: await unreadNoticeCount(user),
+    more: (data || []).length === limit,
+  };
+}
+async function apiMarkNotificationsRead(_c: Ctx, token: string, ids: any) {
+  const user = await requireAuth(token);
+  let list: string[] = [];
+  if (ids === "all") {
+    const { data } = await db.from("notifications").select("id").in("audience", noticeAudience(user)).order("createdAt", { ascending: false }).limit(500);
+    list = (data || []).map((r: any) => r.id);
+  } else {
+    list = (Array.isArray(ids) ? ids : [ids]).map(String).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 500);
+  }
+  if (list.length) {
+    const rows = list.map((id) => ({ userId: user.id, notificationId: id, readAt: nowIso() }));
+    const { error } = await db.from("notificationReads").upsert(rows, { onConflict: "userId,notificationId", ignoreDuplicates: true });
+    if (error && !/foreign key/i.test(error.message)) throw error;
+  }
+  return { ok: true, unread: await unreadNoticeCount(user) };
+}
+async function cleanupNotices() {
+  try {
+    const s = await settingsObject();
+    const days = Math.max(Number(s.NOTIFY_KEEP_DAYS || 90), 7);
+    const { error, count } = await db.from("notifications").delete({ count: "exact" }).lt("createdAt", new Date(Date.now() - days * 86400000).toISOString());
+    if (error) throw error;
+    return count || 0;
+  } catch (_) {
+    return 0;
+  }
 }
 
 // =====================================================================
