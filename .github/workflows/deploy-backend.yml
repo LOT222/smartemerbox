@@ -41,7 +41,7 @@ jobs:
           version: latest
       - name: Deploy function "api"
         if: steps.chk.outputs.skip != '1'
-        run: supabase functions deploy api --project-ref "$PROJECT_REF" --no-verify-jwt
+        run: supabase functions deploy api --project-ref "$PROJECT_REF" --no-verify-jwt --yes
       - name: Health check
         if: steps.chk.outputs.skip != '1'
         run: |
