@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.14.0";
+  const APP_VERSION = "2.14.1";
 
   const S = {
     demo: DEMO,
@@ -332,6 +332,7 @@
           <div class="row" id="pageActions"></div>
           <button class="btn ghost icon" id="bellBtn" onclick="App.go('settings','device')" title="การแจ้งเตือนเครื่องนี้">${ic("bell")}</button>
         </header>
+        <div id="sysBanner"></div>
         <main class="content" id="content"></main>
       </div>
     </div>
@@ -486,9 +487,40 @@
     window.addEventListener("resize", set);
   })();
 
+  // ---------- แถบประกาศของระบบ (admin ตั้งที่ ตั้งค่า → ทั่วไป) ----------
+  const BANNER_LV = { info: ["speakerphone", "ประกาศ"], warn: ["alert-triangle", "แจ้งเตือน"], danger: ["alert-circle", "ด่วน"], ok: ["circle-check", "แจ้งข่าว"] };
+  const bannerKey = (s) => { const t = `${s.SYS_BANNER_LEVEL}|${s.SYS_BANNER_TEXT}`; let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return String(h); };
+  function bannerHtml(s, preview) {
+    const text = String(s.SYS_BANNER_TEXT || "").trim();
+    if (!text) return "";
+    if (!preview) {
+      if (s.SYS_BANNER_UNTIL && todayStr() > s.SYS_BANNER_UNTIL) return "";
+      try { if (localStorage.getItem("seb_banner_hide") === bannerKey(s)) return ""; } catch (_) {}
+    }
+    const lv = BANNER_LV[s.SYS_BANNER_LEVEL] ? s.SYS_BANNER_LEVEL : "info";
+    const canHide = lv !== "danger" && !preview;
+    return `<div class="sys-banner lv-${lv}" role="status">${ic(BANNER_LV[lv][0])}<div class="grow"><b>${BANNER_LV[lv][1]}</b> ${esc(text)}${s.SYS_BANNER_UNTIL ? `<span class="sb-until"> · ถึง ${fmtDLong(s.SYS_BANNER_UNTIL)}</span>` : ""}</div>${canHide ? `<button class="sb-x" title="ซ่อนประกาศนี้" onclick="SEB.hideBanner()">${ic("x")}</button>` : ""}</div>`;
+  }
+  function renderBanner() { const el = document.getElementById("sysBanner"); if (el) el.innerHTML = bannerHtml(S.data?.settings || {}); }
+  function hideBanner() { try { localStorage.setItem("seb_banner_hide", bannerKey(S.data?.settings || {})); } catch (_) {} renderBanner(); }
+
+  // ---------- ปุ่มรูปตา แสดง/ซ่อนรหัสผ่าน (ใส่ให้ทุกช่อง password อัตโนมัติ) ----------
+  function enhancePw() {
+    document.querySelectorAll('input[type="password"]:not([data-eye])').forEach((inp) => {
+      inp.dataset.eye = "1";
+      const w = document.createElement("span"); w.className = "pw-wrap";
+      inp.parentNode.insertBefore(w, inp); w.append(inp);
+      const b = document.createElement("button"); b.type = "button"; b.className = "pw-eye"; b.tabIndex = -1;
+      b.setAttribute("aria-label", "แสดงรหัสผ่าน"); b.innerHTML = ic("eye");
+      b.addEventListener("click", () => { const show = inp.type === "password"; inp.type = show ? "text" : "password"; b.innerHTML = ic(show ? "eye-off" : "eye"); b.setAttribute("aria-label", show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"); inp.focus({ preventScroll: true }); });
+      w.append(b);
+    });
+  }
+  new MutationObserver(enhancePw).observe(document.documentElement, { childList: true, subtree: true });
+
   // ---------------- export ----------------
   window.SEB = {
-    S, api, DEMO, IDLE_MS, Q, dateSel, dateSync, fmtDLong, sealOn, fmtCE, datePick, dpMove, dpSet, dpClose, dtSel, dpTime, dpNow, dpOk, fmtBEdt,
+    S, api, DEMO, IDLE_MS, Q, dateSel, dateSync, fmtDLong, sealOn, bannerHtml, renderBanner, hideBanner, fmtCE, datePick, dpMove, dpSet, dpClose, dtSel, dpTime, dpNow, dpOk, fmtBEdt,
     APP_VERSION, getTheme, setTheme, esc, ic, $, $$, val, fmtD, fmtT, fmtDT, ago, minutes, fmtMin, localInput, todayStr, daysUntil, initials, sum, uid, download, toCsv,
     BOX_STATE, CASE_STATE, ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, LOGO_B, HOSP_LOGO, hospLogoAbs, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, isRealAdmin, withSim, LOGO,
     toast, fail, dialog, drawer, closeDrawer, kpi, empty, field, opt, renderShell, renderNav, setTitle, TITLES,

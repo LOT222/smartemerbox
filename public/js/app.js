@@ -196,6 +196,7 @@
       research: App.pageResearch, stats: App.pageStats, consent: App.pageConsent, consentAdmin: App.pageConsentAdmin, logs: App.pageLogs, users: App.pageUsers, settings: App.pageSettings, more: App.pageMore,
     };
     try { window.SEB.syncLists(); } catch (e) {}
+    try { window.SEB.renderBanner(); } catch (e) {}
     (map[v] || App.pageDashboard)();
   };
 
@@ -207,6 +208,7 @@
       S.user = SEB.withSim(res.user);
       S.data = res.data;
       renderNav();
+      try { window.SEB.renderBanner(); } catch (e) {}
       if (["dashboard", "cases", "boxes"].includes(S.view) && !document.getElementById("drawer")) App.render();
       if ((res.data.stats.openCases || 0) > prevPending && silent) toast("มีการเปิดกล่องยาใหม่");
     } catch (e) { if (!silent) fail(e); }

@@ -510,6 +510,12 @@
     window.open(`${location.origin}${location.pathname}?page=open&boxId=${encodeURIComponent(id)}&t=${encodeURIComponent(t)}`, "_blank");
   };
 
+  App.bannerPrev = () => {
+    const g = (k) => document.querySelector(`[data-s="${k}"]`)?.value || "";
+    const el = $("#bannerPrev"); if (!el) return;
+    el.innerHTML = X.bannerHtml({ SYS_BANNER_TEXT: g("SYS_BANNER_TEXT"), SYS_BANNER_LEVEL: g("SYS_BANNER_LEVEL"), SYS_BANNER_UNTIL: g("SYS_BANNER_UNTIL") }, true) || `<div class="xs faint">— ยังไม่มีประกาศ —</div>`;
+  };
+
   // ---------- items editor ----------
   // ข้อมูลยังเก็บแยกแถวละ 1 lot (แต่ละ lot มีวันหมดอายุของตัวเอง ใช้แจ้งเตือน 30/15/7 วัน)
   // แต่หน้าจอรวมเป็น "ยา 1 รายการ + lot ย่อย" — ชื่อ/ความแรง/หน่วย/ควรมี กรอกครั้งเดียวที่แถวแรก
@@ -1143,6 +1149,12 @@
         <div class="row mt-16" style="justify-content:flex-end"><button class="btn primary" id="pwBtn" onclick="App.changePw()">เปลี่ยนรหัสผ่าน</button></div></div>`;
     } else if (t === "general") {
       body = `<div class="card card-pad"><h3>ข้อมูลหน่วยงาน</h3><div class="form-grid mt-16">${sf("HOSPITAL_NAME", "ชื่อโรงพยาบาล")}${sf("DEPARTMENT_NAME", "ชื่อหน่วยงาน")}${sf("APP_CREDIT_TEXT", "ผู้พัฒนาระบบ")}${sf("PHARMACY_PHONE", "เบอร์โทรห้องยา", "tel", "แสดงในหน้าสแกน QR เมื่อส่งแจ้งเตือนไม่ได้ (เช่น ไม่มีอินเทอร์เน็ต)")}</div></div>
+        <div class="card card-pad mt-16"><h3>แถบประกาศของระบบ</h3><div class="muted small mt-4">ข้อความนี้จะแสดงเป็นแถบด้านบนทุกหน้า ให้ผู้ใช้ทุกคนที่เข้าระบบเห็น เช่น แจ้งปิดปรับปรุงระบบ เปลี่ยนชุดยา หรือนัดตรวจกล่อง · ลบข้อความ = ปิดแถบ</div>
+          <div class="form-grid mt-16">${field("ข้อความประกาศ", `<textarea class="input" rows="2" data-s="SYS_BANNER_TEXT" oninput="App.bannerPrev()" placeholder="เช่น คืนวันเสาร์นี้ 22:00–23:00 น. ปิดปรับปรุงระบบ ให้บันทึกการเปิดกล่องลงกระดาษ">${esc(s.SYS_BANNER_TEXT || "")}</textarea>`, "", "span-2")}
+          ${field("ระดับ", `<select class="input" data-s="SYS_BANNER_LEVEL" onchange="App.bannerPrev()">${opt([["info", "ประกาศ (ฟ้า)"], ["ok", "แจ้งข่าว (เขียว)"], ["warn", "แจ้งเตือน (ส้ม)"], ["danger", "ด่วน (แดง · ปิดแถบไม่ได้)"]], s.SYS_BANNER_LEVEL || "info")}</select>`)}
+          ${field("แสดงถึงวันที่", dateSel('data-s="SYS_BANNER_UNTIL"', s.SYS_BANNER_UNTIL || "", "App.bannerPrev()"), "เว้นว่าง = แสดงจนกว่าจะลบข้อความ")}</div>
+          <div class="xs faint mt-12">ตัวอย่าง</div><div id="bannerPrev" class="mt-4">${X.bannerHtml(s, true) || `<div class="xs faint">— ยังไม่มีประกาศ —</div>`}</div>
+          <div class="row mt-16" style="justify-content:flex-end"><button class="btn primary" onclick="App.saveSettings()">บันทึกประกาศ</button></div></div>
         <div class="card card-pad mt-16"><h3>เกณฑ์การทำงาน</h3><div class="form-grid mt-16">${field("ระบบเลขซีล", `<select class="input" data-s="SEAL_ENABLED">${opt([["0", "ปิด · ซ่อนช่องเลขซีลทุกหน้า (ยังไม่มีซีลใช้)"], ["1", "เปิด · บันทึก/แสดงเลขซีลกล่อง"]], s.SEAL_ENABLED ?? "0")}</select>`, "เปิดเมื่อเริ่มใช้ซีลล็อกกล่องที่มีเลขกำกับ · ข้อมูลเลขซีลเดิมยังเก็บไว้")}${sf("NEAR_EXPIRY_DAYS", "ใกล้หมดอายุ (วัน)", "number")}${sf("INSPECTION_INTERVAL_DAYS", "รอบตรวจกล่อง (วัน)", "number")}${sf("RESPONSE_TARGET_MIN", "เป้าหมายตอบสนอง (นาที)", "number")}${sf("ESCALATE_AFTER_MIN", "แจ้งซ้ำถ้าไม่มีผู้รับทราบ (นาที)", "number")}${sf("PUBLIC_OPEN_COOLDOWN_SEC", "กันสแกนซ้ำ (วินาที)", "number")}${sf("DEFAULT_PASSWORD", "รหัสผ่านเริ่มต้น")}${field("สมัครสมาชิกเอง", `<select class="input" data-s="ALLOW_SIGNUP">${opt([["1", "เปิด (รอผู้ดูแลอนุมัติ)"], ["0", "ปิด"]], s.ALLOW_SIGNUP ?? "1")}</select>`)}</div>
         <div class="row mt-16" style="justify-content:flex-end"><button class="btn primary" id="setBtn" onclick="App.saveSettings()">บันทึก</button></div></div>`;
     } else if (t === "options") {
@@ -1188,7 +1200,8 @@
     const web = SEB.APP_VERSION;
     let h = null;
     try { h = await api("apiHealth"); } catch (e) { el.innerHTML = `<span class="pill danger">เชื่อมต่อ backend ไม่ได้</span> <span class="xs">${esc(e.message)}</span>`; return; }
-    const sameBe = h.version === web;
+    const mm = (v) => String(v || "").split(".").slice(0, 2).join(".");   // เทียบแค่ major.minor · เลข patch = แก้เฉพาะหน้าเว็บ
+    const sameBe = mm(h.version) === mm(web);
     const row = (k, v, ok, tip) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--border)"><span>${k}</span><span class="row" style="gap:8px"><b class="mono">${esc(v)}</b>${ok ? `<span class="pill ok">ตรงกัน</span>` : `<span class="pill warn" title="${esc(tip)}">ต้องอัปเดต</span>`}</span></div>`;
     el.innerHTML = row("หน้าเว็บ (เครื่องนี้)", "v" + web, true, "") +
       row("Backend (Edge Function)", h.version ? "v" + h.version : "รุ่นก่อน 2.12", sameBe, "deploy Edge Function ใหม่") +
