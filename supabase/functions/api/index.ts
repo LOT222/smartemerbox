@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.16.3";
+const APP_VERSION = "2.17.0";
 const SCHEMA_REQUIRED = 7; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -742,9 +742,8 @@ async function notifyOpen(event: any, box: any, settings: any, escalation = fals
     detail: { eventId: event.id, eventCode: event.eventCode, boxCode: box.boxCode, location: event.locationName || box.location || "", reason: event.reasonCategory || "", openedAt: event.actualOpenedAt },
   });
   const flex = buildOpenFlex(event, box, settings, escalation);
-  const [line, moph, push] = await Promise.all([
-    escalation && !lineOnEscalate ? Promise.resolve({ ok: false, skipped: true } as any) : sendLine(flex, settings),
-    sendMoph(flex, settings, escalation ? "escalate" : "open"),
+  const [{ line, moph }, push] = await Promise.all([
+    sendGroupThenLine(flex, settings, escalation ? "escalate" : "open", !escalation || lineOnEscalate),
     // กดแจ้งเตือนเคส → เปิดหน้าเคสโดยตรง (เร่งด่วน) และทำเครื่องหมายว่าอ่านแล้ว
     sendPushAll({ title, body: bodyText, tag: `case-${event.id}`, url: `${appUrl()}?case=${event.id}${nid ? `&n=${nid}` : ""}`, nid, urgent: true }),
   ]);
@@ -1510,7 +1509,7 @@ async function sendExpiryMilestones() {
   const due = cands.filter((c) => !done.has(`${c.alertKey}#${c.milestone}`)).sort((a, b) => a.days - b.days);
   if (!due.length) return { sent: 0 };
   const exFlex = buildExpiryFlex(due, settings);
-  const [line0, moph] = await Promise.all([sendLine(exFlex, settings), sendMoph(exFlex, settings, "expiry")]);
+  const { line: line0, moph } = await sendGroupThenLine(exFlex, settings, "expiry");
   const line = { ...line0, ok: line0.ok || moph.ok };   // ส่งทางใดทางหนึ่งได้ = ถือว่าแจ้งรอบนี้แล้ว
   // บันทึกว่าส่งแล้ว (รวมรอบที่ใหญ่กว่าด้วย เพื่อไม่ส่งย้อนหลัง เช่น ยาที่เพิ่งเพิ่มเข้ากล่องตอนเหลือ 10 วัน จะได้แจ้งรอบ 15 ครั้งเดียว)
   if (line.ok) {
@@ -1564,8 +1563,7 @@ async function sendDailyDigest(force: boolean) {
   // LINE โควตาฟรีมีจำกัด (นับตามจำนวนผู้รับ) → สรุปรายวันส่ง LINE เฉพาะเมื่อเปิดใช้ หรือกดส่งเอง
   const useLine = force || String(settings.LINE_DAILY_DIGEST || "0") === "1";
   const dgFlex = buildDigestFlex(items, overdue, settings);
-  const line = useLine ? await sendLine(dgFlex, settings) : { ok: false, skipped: true, message: "สรุปรายวันส่งผ่าน Push เท่านั้น" };
-  await sendMoph(dgFlex, settings, force ? "test" : "daily");
+  const { line } = await sendGroupThenLine(dgFlex, settings, force ? "test" : "daily", useLine);
   const push = await pushWithNotice({
     kind: "daily", title: "สรุปกล่องยาฉุกเฉินประจำวัน", link: "boxes",
     body: `หมดอายุ ${expired} · ใกล้หมดอายุ ${items.length - expired} · เลยวันตรวจ ${overdue.length} กล่อง`,
@@ -1722,6 +1720,27 @@ async function sendLine(message: any, settings: any) {
   } catch (e: any) {
     return { ok: false, message: `เชื่อมต่อ LINE ไม่ได้: ${e?.message || e}` };
   }
+}
+
+// ---------- LINE OA: ส่งทุกครั้ง / สำรอง / ปิด ----------
+// fallback (ค่าเริ่มต้นเมื่อเปิดหมอพร้อม) = ส่ง LINE OA เฉพาะเมื่อหมอพร้อมส่งไม่สำเร็จหรือไม่ได้ส่ง → ปกติไม่กินโควตา
+function lineOaMode(settings: any) {
+  const m = String(settings.LINE_OA_MODE || "").trim();
+  if (m === "always" || m === "fallback" || m === "off") return m;
+  return String(settings.MOPH_ENABLED || "0") === "1" ? "fallback" : "always";
+}
+// ส่งหมอพร้อมก่อน แล้วค่อยตัดสินว่าจะส่ง LINE OA ไหม (allowLine = เงื่อนไขเดิมของแต่ละเรื่อง เช่น แจ้งซ้ำ/สรุปรายวัน)
+async function sendGroupThenLine(flex: any, settings: any, kind: string, allowLine = true) {
+  const moph = await sendMoph(flex, settings, kind);
+  const mode = lineOaMode(settings);
+  const skip = (message: string) => ({ ok: false, skipped: true, message } as any);
+  let line: any;
+  if (!allowLine) line = skip("ไม่ได้ตั้งให้ส่ง LINE OA สำหรับเรื่องนี้");
+  else if (mode === "off") line = skip("ปิดการส่ง LINE OA");
+  else if (mode === "fallback" && moph.ok) line = skip("หมอพร้อมส่งสำเร็จ · ไม่ใช้ LINE OA (โหมดสำรอง)");
+  else line = await sendLine(flex, settings);
+  if (mode === "fallback" && !moph.ok && !moph.skipped && line.ok) line.message = `หมอพร้อมไม่สำเร็จ → ส่ง LINE OA สำรองแล้ว (${moph.message || ""})`.slice(0, 300);
+  return { line, moph };
 }
 
 // ---------- หมอพร้อม (MOPH Notify) → กลุ่ม LINE ----------
