@@ -496,7 +496,24 @@
     try { App._flex = await api("apiFlexPreview", S.token); App.flexShow("open"); }
     catch (e) { const el = $("#flexStage"); if (el) el.innerHTML = `<div class="small muted">ยังแสดงตัวอย่างไม่ได้ — Backend ยังเป็นเวอร์ชันเก่า (ต้อง deploy Edge Function v2.13.0 ก่อน)</div>`; }
   };
+  const FLEX_NAMES = { open: "เปิดกล่อง", escalate: "ยังไม่มีผู้รับทราบ", expiry: "ยาใกล้หมดอายุ", daily: "สรุปรายวัน", test: "ทดสอบ" };
+  App.flexSend = async (k = App._flexKind || "open", quiet = false) => {
+    try {
+      const r = await api("apiTestFlex", S.token, k);
+      const m = r.moph || {};
+      if (!quiet) toast(`${FLEX_NAMES[k]}: ${m.ok ? (m.textFallback ? "ส่งเป็นข้อความธรรมดา (การ์ดไม่ผ่าน)" : "ส่งเข้ากลุ่มแล้ว") : m.message || "ไม่สำเร็จ"}`, !m.ok);
+      return m.ok;
+    } catch (e) { fail(e); return false; }
+  };
+  App.flexSendAll = async () => {
+    const ks = ["open", "escalate", "expiry", "daily"];
+    let ok = 0;
+    for (const k of ks) { if (await App.flexSend(k, true)) ok++; }
+    toast(`ส่งตัวอย่างเข้ากลุ่ม ${ok}/${ks.length} แบบ`, ok < ks.length);
+  };
   App.flexShow = (k) => {
+    App._flexKind = k;
+    const nm = $("#flexSendName"); if (nm) nm.textContent = FLEX_NAMES[k] || k;
     $$("#flexSeg button").forEach((b) => b.classList.toggle("on", b.dataset.k === k));
     const el = $("#flexStage"); if (el && App._flex) el.innerHTML = flexHtml(App._flex[k]);
   };
@@ -1187,8 +1204,10 @@
         <div class="alert warn mt-16" style="padding:10px 14px"><div class="grow small">LINE OA แพ็กเกจฟรีมีโควตาจำกัดต่อเดือน และนับตาม<b>จำนวนผู้รับ</b> ถ้าโควตาหมด ข้อความเปิดกล่องจะส่งไม่สำเร็จ และเหตุการณ์นั้นจะไม่มี notification_sent_at</div><div id="lineQuota" class="small nowrap"><button class="btn sm" onclick="App.lineQuota()">ตรวจโควตา</button></div></div>
         <div class="row wrap mt-16" style="justify-content:flex-end"><button class="btn" onclick="App.testNotify('line')">${ic("send")} ทดสอบส่ง LINE OA + Push</button><button class="btn" onclick="App.sendExpiry()">${ic("calendar-exclamation")} ส่งสรุปยาใกล้หมดอายุตอนนี้</button><button class="btn primary" id="setBtn" onclick="App.saveSettings()">บันทึก</button></div></div>`;
       body += `<div class="card card-pad mt-16"><div class="row between wrap gap-12"><div><h3>ตัวอย่างการ์ด LINE</h3><div class="muted small mt-4">หน้าตาจริงที่ส่งเข้า LINE OA (สร้างจากเซิร์ฟเวอร์ด้วยข้อมูลตัวอย่าง · ไม่แสดง HN ตามโครงร่างวิจัย)</div></div>
-        <div class="seg" id="flexSeg">${[["open", "เปิดกล่อง"], ["escalate", "ยังไม่มีผู้รับทราบ"], ["expiry", "ยาใกล้หมดอายุ"], ["test", "ทดสอบ"]].map(([k, l], i) => `<button type="button" class="${i ? "" : "on"}" data-k="${k}" onclick="App.flexShow('${k}')">${l}</button>`).join("")}</div></div>
-        <div class="flex-stage mt-16" id="flexStage"><div class="xs faint">กำลังโหลดตัวอย่าง…</div></div></div>`;
+        <div class="seg" id="flexSeg">${[["open", "เปิดกล่อง"], ["escalate", "ยังไม่มีผู้รับทราบ"], ["expiry", "ยาใกล้หมดอายุ"], ["daily", "สรุปรายวัน"], ["test", "ทดสอบ"]].map(([k, l], i) => `<button type="button" class="${i ? "" : "on"}" data-k="${k}" onclick="App.flexShow('${k}')">${l}</button>`).join("")}</div></div>
+        <div class="flex-stage mt-16" id="flexStage"><div class="xs faint">กำลังโหลดตัวอย่าง…</div></div>
+        <div class="row wrap mt-12" style="justify-content:flex-end;align-items:center"><span class="xs faint grow">ส่งการ์ดที่เลือกอยู่ (ข้อมูลสมมติ) เข้ากลุ่มหมอพร้อม · ไม่ใช้โควตา LINE OA</span>
+          <button class="btn" id="flexSendBtn" onclick="App.flexSend()">${ic("send")} ส่งการ์ด “<span id="flexSendName">เปิดกล่อง</span>” เข้ากลุ่ม</button><button class="btn ghost" onclick="App.flexSendAll()">ส่งครบทุกแบบ</button></div></div>`;
       setTimeout(() => App.flexLoad(), 0);
     } else if (t === "pdpa") {
       const T = window.SEB_TEXT;

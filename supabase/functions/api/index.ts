@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.16.2";
+const APP_VERSION = "2.16.3";
 const SCHEMA_REQUIRED = 7; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -136,6 +136,7 @@ const actions: Record<string, Fn> = {
   apiSaveSettings,
   apiTestNotify,
   apiFlexPreview,
+  apiTestFlex,
   apiSavePushSubscription,
   apiRemovePushSubscription,
   apiListNotifications,
@@ -1829,10 +1830,8 @@ function buildOpenFlex(event: any, box: any, settings: any, escalation: boolean)
   };
 }
 // ตัวอย่างการ์ดสำหรับหน้า "ตั้งค่า" — ใช้ฟังก์ชันจริงชุดเดียวกับที่ส่ง LINE
-async function apiFlexPreview(_c: Ctx, token: string) {
-  await requireAdmin(token);
-  const settings = await settingsObject();
-  const now = nowIso();
+// ตัวอย่างการ์ดทุกแบบ (ข้อมูลสมมติ) — ใช้ทั้งหน้า "ตัวอย่างการ์ด" และปุ่มส่งตัวอย่างเข้ากลุ่ม
+function flexSamples(settings: any) {
   const box = { boxCode: "ER-01", location: "ห้องอุบัติเหตุ-ฉุกเฉิน (ER)" };
   const ev = { eventCode: "EV-2611-AB12C", reasonCategory: "CPR", actualOpenedAt: new Date(Date.now() - 12 * 60000).toISOString(), openerName: "พว.ตัวอย่าง", locationName: box.location };
   const d = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
@@ -1840,7 +1839,31 @@ async function apiFlexPreview(_c: Ctx, token: string) {
     { milestone: 7, drugName: "Adrenaline inj.", strength: "1 mg/ml", boxCode: "ER-01", location: box.location, lot: "J690045", expiryDate: d(6), days: 6 },
     { milestone: 30, drugName: "Atropine inj.", strength: "0.6 mg/ml", boxCode: "WARD-1", location: "หอผู้ป่วยใน", lot: "J670368", expiryDate: d(28), days: 28 },
   ];
-  return { open: buildOpenFlex(ev, box, settings, false), escalate: buildOpenFlex(ev, box, settings, true), expiry: buildExpiryFlex(due, settings), test: buildTestFlex(settings), at: now };
+  const items = [
+    { drugName: "Salbutamol sol.", strength: "20 ml", boxCode: "EMS-01", lot: "3910242", expiryDate: d(-3), days: -3 },
+    ...due,
+  ];
+  const overdue = [{ boxCode: "LR-01" }, { boxCode: "OPD-1" }];
+  return {
+    open: buildOpenFlex(ev, box, settings, false), escalate: buildOpenFlex(ev, box, settings, true),
+    expiry: buildExpiryFlex(due, settings), daily: buildDigestFlex(items, overdue, settings), test: buildTestFlex(settings),
+  };
+}
+async function apiFlexPreview(_c: Ctx, token: string) {
+  await requireAdmin(token);
+  return { ...flexSamples(await settingsObject()), at: nowIso() };
+}
+// ส่งตัวอย่างการ์ดแบบที่เลือกเข้ากลุ่มหมอพร้อม (ไม่ใช้โควตา LINE OA) · altText ขึ้นต้นด้วย [ตัวอย่าง]
+async function apiTestFlex(_c: Ctx, token: string, kind: string) {
+  const user = await requireAdmin(token);
+  const settings = await settingsObject();
+  const all: any = flexSamples(settings);
+  const msg = all[kind];
+  if (!msg) throw new Error("ไม่รู้จักแบบการ์ด");
+  const sample = { ...msg, altText: `[ตัวอย่าง] ${msg.altText}`.slice(0, 400) };
+  const moph = await sendMoph(sample, { ...settings, MOPH_ENABLED: "1" }, "test");
+  await audit(user, "test_flex", { kind, ok: moph.ok });
+  return { moph };
 }
 function buildDigestFlex(items: any[], overdue: any[], settings: any) {
   const lines = items.slice(0, 8).map((it) => ({
