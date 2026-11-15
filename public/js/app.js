@@ -177,7 +177,7 @@
     if (pick === "__qr") {
       const b = S.data.boxes[0];
       if (!b) return toast("ยังไม่มีกล่องยา", true);
-      return window.open(b.qrUrl || `?page=open&boxId=${b.id}&t=${b.qrToken}`, "_blank");
+      return App.tryQr ? App.tryQr(b.id) : window.open(`?page=open&boxId=${b.id}&t=${b.qrToken}`, "_blank");   // เปิดบนเว็บที่ใช้อยู่ ไม่ใช่ลิงก์ระบบจริง
     }
     if (!S.realUser) S.realUser = S.user;
     S.sim = pick;

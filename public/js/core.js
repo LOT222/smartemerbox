@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.20.0";
+  const APP_VERSION = "2.20.1";
 
   const S = {
     demo: DEMO,
@@ -341,7 +341,7 @@
     </div>
     <nav class="tabbar" id="tabbar"></nav>
     ${S.demo ? `<div class="demo-ribbon">โหมดตัวอย่าง · ข้อมูลจำลอง</div>` : ""}
-    ${S.sim ? `<div class="sim-bar">${ic("eye")}<span>กำลังดูในบทบาท <b>${esc(ROLE[S.sim] || S.sim)}</b> · ดูได้อย่างเดียว</span><button class="btn sm" onclick="App.pickSimRole()">เปลี่ยนบทบาท</button><button class="btn sm primary" onclick="App.endSim()">กลับเป็นผู้ดูแลระบบ</button></div>` : ""}`;
+    ${S.sim ? `<button type="button" class="sim-chip" onclick="this.nextElementSibling.classList.toggle('open')" title="กำลังดูในบทบาทอื่น">${ic("eye")}<span>${esc(ROLE[S.sim] || S.sim)}</span></button><div class="sim-bar">${ic("eye")}<span>กำลังดูในบทบาท <b>${esc(ROLE[S.sim] || S.sim)}</b> · ดูได้อย่างเดียว</span><button class="btn sm" onclick="App.pickSimRole()">เปลี่ยนบทบาท</button><button class="btn sm primary" onclick="App.endSim()">กลับเป็นผู้ดูแลระบบ</button></div>` : ""}`;
     window.addEventListener("scroll", () => $("#topbar")?.classList.toggle("scrolled", window.scrollY > 4), { passive: true });
     renderNav();
     App.updateBell();

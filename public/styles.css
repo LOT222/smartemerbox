@@ -1231,3 +1231,14 @@ html.dark .sys-banner.lv-warn { background: rgba(217,119,6,.16); color: #fef3c7;
 .pl-qmsg { margin-top: 4px; font-size: 12.5px; font-weight: 650; }
 .pl-qmsg.q-short { color: #b91c1c; } .pl-qmsg.q-over { color: #6d28d9; }
 .dsel.dpick.be { min-width: 0; }
+/* v2.20.1 — มือถือ: ป้ายจำลองบทบาทเล็กที่มุมขวาบน แตะเพื่อเปลี่ยน/กลับ */
+.sim-chip { display: none; }
+@media (max-width: 860px) {
+  .sim-chip { display: inline-flex; position: fixed; top: calc(8px + env(safe-area-inset-top)); right: 64px; z-index: 45; align-items: center; gap: 5px; padding: 5px 10px 5px 8px; border-radius: 999px; border: 0; background: #1f2430; color: #fff; font: inherit; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,.2); cursor: pointer; max-width: 46vw; }
+  .sim-chip .ti { width: 15px; height: 15px; background-color: #ffd166; flex: none; }
+  .sim-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sim-bar { display: none; top: calc(46px + env(safe-area-inset-top)); bottom: auto; left: auto; right: 12px; transform: none; flex-direction: column; align-items: stretch; border-radius: 14px; padding: 12px; gap: 8px; width: min(260px, calc(100vw - 24px)); font-size: 13px; }
+  .sim-bar.open { display: flex; }
+  .sim-bar > .ti { display: none; }
+  .sim-bar .btn { justify-content: center; }
+}
