@@ -534,13 +534,14 @@
     ["expiry", "ยาใกล้หมดอายุ (30/15/7 วัน)", ""],
     ["daily", "สรุปประจำวัน 08:00 น.", ""],
     ["account", "คำขอบัญชี / ลืมรหัสผ่าน", "admin"],
+    ["test", "ทดสอบการแจ้งเตือน", "admin"],
   ];
   function prefsCard() {
     const p = S.user?.notifyPrefs || { hide: [], mute: [] };
     const rows = PREF_KINDS.filter(([, , t]) => t !== "admin" || S.user?.role === "admin").map(([k, l, hint]) => {
       const kd = App.NOTICE_KIND?.[k] || {};
       const sw = (list, title) => `<label class="np-sw" title="${title}"><input type="checkbox" data-np="${list}" data-k="${k}" ${p[list].includes(k) ? "" : "checked"} onchange="App.prefDirty()"><span></span></label>`;
-      return `<div class="np-row"><span class="np-ic" style="--c:${kd.c || "#64748b"}">${ic(kd.icon || "bell")}</span><div class="grow"><div class="small" style="font-weight:600">${l}</div>${hint && hint !== "admin" ? `<div class="xs faint">${hint}</div>` : ""}</div>${sw("hide", "แสดงในกล่องแจ้งเตือน")}${sw("mute", "เด้งบนเครื่อง (Push)")}</div>`;
+      return `<div class="np-row"><span class="np-ic" style="--c:${kd.c || "#64748b"}">${ic(kd.icon || "bell")}</span><div class="grow"><div class="small" style="font-weight:600">${l}</div>${hint && hint !== "admin" ? `<div class="xs faint">${hint}</div>` : ""}</div>${sw("hide", "แสดงในกล่องแจ้งเตือน")}${k === "test" ? `<span class="np-sw xs faint" title="ปุ่มทดสอบส่ง Push ถึงเสมอ เพื่อใช้เช็กว่าเครื่องรับได้">ส่งเสมอ</span>` : sw("mute", "เด้งบนเครื่อง (Push)")}</div>`;
     }).join("");
     return `<div class="card card-pad mt-16"><div class="row between wrap gap-12"><div><h3>เลือกเรื่องที่ต้องการรับแจ้ง</h3><div class="muted small mt-4">ตั้งเฉพาะบัญชีของคุณ ใช้กับทุกเครื่องที่ล็อกอินบัญชีนี้ · ไม่กระทบคนอื่น และไม่กระทบกลุ่ม LINE</div></div></div>
       <div class="np-head mt-16"><span class="grow"></span><span>ในระบบ</span><span>เด้งบนเครื่อง</span></div>

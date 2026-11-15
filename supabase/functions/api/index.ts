@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.18.0";
+const APP_VERSION = "2.18.1";
 const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -1431,7 +1431,7 @@ async function apiTestNotify(_c: Ctx, token: string, channel = "all") {
   const [line, moph, push] = await Promise.all([
     channel === "moph" ? skip("ไม่ได้ทดสอบ LINE OA") : sendLine(flex, settings),
     channel === "line" ? skip("ไม่ได้ทดสอบหมอพร้อม") : sendMoph(flex, { ...settings, MOPH_ENABLED: channel === "moph" ? "1" : settings.MOPH_ENABLED }, "test"),
-    channel === "moph" ? Promise.resolve({ sent: 0, failed: 0 }) : pushWithNotice({ kind: "test", title: "ทดสอบการแจ้งเตือน SEB", body: `ส่งโดย ${user.displayName || user.username}`, link: "settings/device" }, { tag: "test" }),
+    channel === "moph" ? Promise.resolve({ sent: 0, failed: 0 }) : pushWithNotice({ kind: "test", audience: "admin", title: "ทดสอบการแจ้งเตือน SEB", body: `ส่งโดย ${user.displayName || user.username}`, link: "settings/device" }, { tag: "test" }),
   ]);
   return { line, moph, push };
 }
@@ -1610,8 +1610,8 @@ async function pushWithNotice(n: Notice, extra: any = {}) {
 // hide = ไม่แสดงในกล่องแจ้งเตือน/ไม่นับยังไม่อ่าน · mute = ไม่เด้ง Push บนเครื่องของคนนี้ (ทดสอบ = ส่งเสมอ)
 const NOTICE_KINDS = ["case", "escalate", "expiry", "daily", "account", "test"];
 function normPrefs(p: any) {
-  const pick = (a: any) => (Array.isArray(a) ? a.map(String).filter((k) => NOTICE_KINDS.includes(k) && k !== "test") : []);
-  return { hide: pick(p?.hide), mute: pick(p?.mute) };
+  const pick = (a: any, allowTest: boolean) => (Array.isArray(a) ? a.map(String).filter((k) => NOTICE_KINDS.includes(k) && (allowTest || k !== "test")) : []);
+  return { hide: pick(p?.hide, true), mute: pick(p?.mute, false) };   // ทดสอบ: ซ่อนในระบบได้ แต่ Push ส่งถึงเสมอ
 }
 const hiddenKinds = (user: any) => normPrefs(user?.notifyPrefs).hide;
 function filterHidden(q: any, user: any) { const h = hiddenKinds(user); return h.length ? q.not("kind", "in", `(${h.join(",")})`) : q; }
