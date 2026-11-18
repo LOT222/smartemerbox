@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.20.0";
+const APP_VERSION = "2.20.2";
 const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -1835,14 +1835,17 @@ async function sendMoph(message: any, settings: any, kind: string) {
     const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "client-key": ck, "secret-key": sk }, body: JSON.stringify({ messages: [msg] }) });
     const text = await res.text();
     let j: any = null; try { j = JSON.parse(text); } catch { /* ไม่ใช่ JSON */ }
-    const ok = res.ok && Number(j?.message_code) === 200;
+    // HTTP 2xx = หมอพร้อมรับไปแล้ว (บางครั้งไม่ส่ง message_code กลับมา) · ถือว่าไม่สำเร็จเฉพาะเมื่อมี message_code ที่ไม่ใช่ 200
+    const mc = j?.message_code ?? j?.status_code ?? null;
+    const ok = res.ok && (mc == null || Number(mc) === 200);
     return { ok, status: res.status, code: j?.message_code, detail: `HTTP ${res.status}${j?.message_code != null ? ` · message_code ${j.message_code}` : ""} · ${(j?.message || text || "(ไม่มีข้อความตอบกลับ)").toString().slice(0, 240)}` };
   };
   try {
     const r1 = await post(message);
     if (r1.ok) return { ok: true, at: nowIso(), status: r1.status, message: "ส่งเข้ากลุ่ม LINE (หมอพร้อม) สำเร็จ" };
-    // ส่งการ์ด (Flex) ไม่ผ่าน → ลองส่งเป็นข้อความธรรมดา เพื่อให้กลุ่มยังได้รับแจ้ง และแยกได้ว่าติดที่ key หรือรูปแบบการ์ด
-    if (message?.type === "flex") {
+    // การ์ด (Flex) ถูกปฏิเสธชัดเจน (HTTP 4xx) → ลองส่งเป็นข้อความธรรมดา เพื่อให้กลุ่มยังได้รับแจ้ง
+    // ไม่ส่งซ้ำเมื่อ HTTP 2xx/5xx เพราะการ์ดอาจเข้ากลุ่มไปแล้ว → กลุ่มจะได้ทั้งการ์ดและข้อความซ้ำกัน
+    if (message?.type === "flex" && r1.status >= 400 && r1.status < 500) {
       const r2 = await post({ type: "text", text: String(message.altText || "แจ้งเตือนจาก SEB").slice(0, 4900) });
       if (r2.ok) return { ok: true, at: nowIso(), status: r2.status, textFallback: true, message: `ส่งเป็นข้อความธรรมดาสำเร็จ (การ์ดไม่ผ่าน: ${r1.detail})` };
       return { ok: false, status: r2.status, message: `การ์ด: ${r1.detail} | ข้อความ: ${r2.detail}` };
