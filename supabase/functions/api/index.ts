@@ -1842,7 +1842,7 @@ async function sendMoph(message: any, settings: any, kind: string) {
   };
   try {
     const r1 = await post(message);
-    if (r1.ok) return { ok: true, at: nowIso(), status: r1.status, message: "ส่งเข้ากลุ่ม LINE (หมอพร้อม) สำเร็จ" };
+    if (r1.ok) return { ok: true, at: nowIso(), status: r1.status, message: `ส่งเข้ากลุ่ม LINE (หมอพร้อม) สำเร็จ · ตอบกลับ: ${r1.detail}` };
     // การ์ด (Flex) ถูกปฏิเสธชัดเจน (HTTP 4xx) → ลองส่งเป็นข้อความธรรมดา เพื่อให้กลุ่มยังได้รับแจ้ง
     // ไม่ส่งซ้ำเมื่อ HTTP 2xx/5xx เพราะการ์ดอาจเข้ากลุ่มไปแล้ว → กลุ่มจะได้ทั้งการ์ดและข้อความซ้ำกัน
     if (message?.type === "flex" && r1.status >= 400 && r1.status < 500) {
