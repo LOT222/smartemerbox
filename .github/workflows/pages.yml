@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: ตรวจ syntax ก่อน deploy (ผิด = หยุด หน้าเว็บจริงไม่เปลี่ยน)
+        run: sh tools/check.sh
       - uses: actions/configure-pages@v5
       - name: Write runtime config
         run: |

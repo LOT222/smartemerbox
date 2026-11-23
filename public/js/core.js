@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.20.3";
+  const APP_VERSION = "2.21.0";
 
   const S = {
     demo: DEMO,
@@ -519,13 +519,13 @@
 
   // ---------- ปุ่มรูปตา แสดง/ซ่อนรหัสผ่าน (ใส่ให้ทุกช่อง password อัตโนมัติ) ----------
   function enhancePw() {
-    document.querySelectorAll('input[type="password"]:not([data-eye])').forEach((inp) => {
+    document.querySelectorAll('input[type="password"]:not([data-eye]), input.secret-in:not([data-eye])').forEach((inp) => {
       inp.dataset.eye = "1";
       const w = document.createElement("span"); w.className = "pw-wrap";
       inp.parentNode.insertBefore(w, inp); w.append(inp);
       const b = document.createElement("button"); b.type = "button"; b.className = "pw-eye"; b.tabIndex = -1;
       b.setAttribute("aria-label", "แสดงรหัสผ่าน"); b.innerHTML = ic("eye");
-      b.addEventListener("click", () => { const show = inp.type === "password"; inp.type = show ? "text" : "password"; b.innerHTML = ic(show ? "eye-off" : "eye"); b.setAttribute("aria-label", show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"); inp.focus({ preventScroll: true }); });
+      b.addEventListener("click", () => { const sec = inp.classList.contains("secret-in"); const show = sec ? !inp.classList.contains("show") : inp.type === "password"; if (sec) inp.classList.toggle("show", show); else inp.type = show ? "text" : "password"; b.innerHTML = ic(show ? "eye-off" : "eye"); b.setAttribute("aria-label", show ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"); inp.focus({ preventScroll: true }); });
       w.append(b);
     });
   }

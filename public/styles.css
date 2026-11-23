@@ -1242,3 +1242,6 @@ html.dark .sys-banner.lv-warn { background: rgba(217,119,6,.16); color: #fef3c7;
   .sim-bar > .ti { display: none; }
   .sim-bar .btn { justify-content: center; }
 }
+
+/* ช่องคีย์ลับ: ใช้ type=text + ปิดบังด้วย CSS เพื่อไม่ให้เบราว์เซอร์เติม/จำรหัสผ่านลงช่องนี้ */
+.secret-in:not(.show) { -webkit-text-security: disc; text-security: disc; }

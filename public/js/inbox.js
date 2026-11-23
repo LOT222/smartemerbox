@@ -15,6 +15,7 @@
     escalate: { icon: "alert-triangle", c: "#ea580c", label: "ยังไม่มีผู้รับทราบ" },
     account: { icon: "user-plus", c: "#7c3aed", label: "คำขอบัญชี" },
     test: { icon: "speakerphone", c: "#475569", label: "ทดสอบ" },
+    system: { icon: "alert-triangle", c: "#b91c1c", label: "ระบบ" },
   };
   App.NOTICE_KIND = KIND;
   const kindOf = (n) => KIND[n.kind] || { icon: "bell", c: "#64748b", label: "แจ้งเตือน" };

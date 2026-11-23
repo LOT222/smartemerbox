@@ -7,10 +7,11 @@ name: Deploy backend (Edge Function)
 # ฐานข้อมูล (migration) ไม่ deploy อัตโนมัติ เพื่อความปลอดภัยของข้อมูลวิจัย → รันเองใน SQL Editor
 on:
   push:
-    branches: [main, master, seb-v2]
+    branches: [main, master]   # ระบบจริง deploy จาก main เท่านั้น (seb-v2 = ทดลอง)
     paths:
       - "supabase/functions/**"
       - ".github/workflows/deploy-backend.yml"
+      - "tools/check.sh"
   workflow_dispatch:
 
 concurrency:
@@ -35,6 +36,9 @@ jobs:
           fi
       - uses: actions/checkout@v4
         if: steps.chk.outputs.skip != '1'
+      - name: ตรวจ syntax ก่อน deploy (ผิด = หยุด ไม่ขึ้นระบบจริง)
+        if: steps.chk.outputs.skip != '1'
+        run: sh tools/check.sh
       - uses: supabase/setup-cli@v1
         if: steps.chk.outputs.skip != '1'
         with:

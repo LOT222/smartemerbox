@@ -24,6 +24,14 @@
     };
   }
 
+  // แถบแดงสำหรับผู้ดูแล: หมอพร้อมส่งเข้ากลุ่มไม่สำเร็จครั้งล่าสุด (หายเองเมื่อส่งผ่านอีกครั้ง)
+  function mophAlert() {
+    if (!isAdmin()) return "";
+    let e = null; try { e = JSON.parse(D().settings?.MOPH_LAST_ERROR || "null"); } catch (_) { e = null; }
+    if (!e || !e.at) return "";
+    return `<div class="alert danger mb-16 row gap-12" style="align-items:center">${ic("alert-triangle")}<div class="grow"><b>หมอพร้อมส่งเข้ากลุ่ม LINE ไม่สำเร็จ</b> · ${esc(fmtDT(e.at))}<div class="small">${esc(e.message || "")}${String(D().settings.LINE_OA_MODE || "fallback") === "fallback" ? " · ระหว่างนี้ระบบส่ง LINE OA แทน (ใช้โควตา)" : ""}</div></div><button class="btn sm" onclick="App.go('settings','notify')">ตรวจการตั้งค่า</button></div>`;
+  }
+
   // =================================================================
   // Dashboard
   // =================================================================
@@ -44,6 +52,7 @@
       <div class="row between wrap mb-16"><div class="muted">${hello}, ${esc(S.user.displayName)} · ${fmtD(new Date().toISOString())}</div>
         <div class="row"><span class="pill ${st.pendingCases ? "danger live" : "ok"}">${st.pendingCases ? `${st.pendingCases} เคสรอดำเนินการ` : "ไม่มีเคสค้าง"}</span></div></div>
       <div id="pushPrompt"></div>${App.consentInviteHtml ? App.consentInviteHtml() : ""}
+      ${mophAlert()}
       ${pend.length ? `<div class="col gap-8 mb-16">${pend.map(alertCase).join("")}</div>` : ""}
       <div class="grid grid-4">
         ${kpi("กล่องพร้อมใช้", `${st.ready}`, "circle-check", "ok", `${st.notReady ? `ไม่พร้อมใช้ ${st.notReady} กล่อง` : "ทุกกล่องพร้อมใช้งาน"}`, `/${st.totalBoxes}`)}
@@ -1275,8 +1284,8 @@
         <div class="form-grid mt-16">
           ${field("การส่งเข้ากลุ่ม", `<select class="input" data-s="MOPH_ENABLED">${opt([["0", "ปิด"], ["1", "เปิด · ส่งเข้ากลุ่ม LINE"]], s.MOPH_ENABLED || "0")}</select>`)}
           <div></div>
-          ${field("Client Key (Client_ID)", `<input class="input" data-s="MOPH_CLIENT_KEY" type="password" autocomplete="off" placeholder="${s.MOPH_KEYS_SET ? `ตั้งค่าแล้ว${s.MOPH_CLIENT_HINT ? ` (${esc(s.MOPH_CLIENT_HINT)})` : ""} · เว้นว่างถ้าไม่เปลี่ยน` : "วาง Client_ID"}">`)}
-          ${field("Secret Key (Secret)", `<input class="input" data-s="MOPH_SECRET_KEY" type="password" autocomplete="off" placeholder="${s.MOPH_KEYS_SET ? "ตั้งค่าแล้ว · เว้นว่างถ้าไม่เปลี่ยน" : "วาง Secret"}">`, "เก็บในฐานข้อมูลฝั่งเซิร์ฟเวอร์ ไม่ส่งกลับมาที่หน้าเว็บ")}
+          ${field("Client Key (Client_ID)", `<input class="input secret-in" data-s="MOPH_CLIENT_KEY" type="text" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="${s.MOPH_KEYS_SET ? `ตั้งค่าแล้ว${s.MOPH_CLIENT_HINT ? ` (${esc(s.MOPH_CLIENT_HINT)})` : ""} · เว้นว่างถ้าไม่เปลี่ยน` : "วาง Client_ID"}">`)}
+          ${field("Secret Key (Secret)", `<input class="input secret-in" data-s="MOPH_SECRET_KEY" type="text" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="${s.MOPH_KEYS_SET ? "ตั้งค่าแล้ว · เว้นว่างถ้าไม่เปลี่ยน" : "วาง Secret"}">`, "เก็บในฐานข้อมูลฝั่งเซิร์ฟเวอร์ ไม่ส่งกลับมาที่หน้าเว็บ")}
           ${field("ส่งเรื่องไหนเข้ากลุ่ม", `<div class="col gap-8 mt-4">${mkBox("open", "เปิดกล่องยาฉุกเฉิน")}${mkBox("escalate", "แจ้งซ้ำเมื่อยังไม่มีผู้รับทราบ")}${mkBox("expiry", "ยาใกล้หมดอายุตามรอบวัน (30/15/7)")}${mkBox("daily", "สรุปภาพรวมรายวัน 08:00 น.")}</div><input type="hidden" data-s="MOPH_KINDS" value="${esc(mk.join(","))}">`, "", "full")}
         </div>
         <details class="mt-12"><summary class="small" style="cursor:pointer"><b>วิธีขอ Client_ID / Secret</b></summary><ol class="small muted mt-8" style="padding-left:18px;line-height:1.8">
@@ -1286,7 +1295,7 @@
         <div class="row wrap mt-16" style="justify-content:flex-end"><span class="xs faint grow">ปุ่มทดสอบนี้ส่งเข้ากลุ่มหมอพร้อมอย่างเดียว · ไม่ใช้โควตา LINE OA</span><div id="mophResult" class="full" style="width:100%;order:9"></div><button class="btn" onclick="App.testNotify('moph')">${ic("send")} ทดสอบส่งเข้ากลุ่ม</button><button class="btn primary" onclick="App.saveSettings()">บันทึก</button></div></div>
         ${roleMatrixCard()}
         <div class="card card-pad mt-16"><h3>LINE Messaging API</h3><div class="muted small mt-4">ช่องทางหลักที่ใช้นับ notification_sent_at ตามนิยาม 5.7.4 · ข้อความไม่แสดง HN</div><div class="form-grid mt-16">
-        ${field("Channel access token", `<input class="input" data-s="LINE_CHANNEL_ACCESS_TOKEN" type="password" placeholder="${s.LINE_TOKEN_SET ? "ตั้งค่าแล้ว · เว้นว่างถ้าไม่เปลี่ยน" : "วาง token ที่นี่"}">`, s.LINE_TOKEN_SET ? "✓ ตั้งค่าแล้ว" : "")}
+        ${field("Channel access token", `<input class="input secret-in" data-s="LINE_CHANNEL_ACCESS_TOKEN" type="text" autocomplete="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="${s.LINE_TOKEN_SET ? "ตั้งค่าแล้ว · เว้นว่างถ้าไม่เปลี่ยน" : "วาง token ที่นี่"}">`, s.LINE_TOKEN_SET ? "✓ ตั้งค่าแล้ว" : "")}
         ${field("การส่งทาง LINE OA", `<select class="input" data-s="LINE_OA_MODE">${opt([["fallback", "สำรอง · ส่งเฉพาะเมื่อหมอพร้อมส่งไม่สำเร็จ (แนะนำ)"], ["always", "ส่งทุกครั้ง (ใช้โควตาทุกข้อความ)"], ["off", "ปิด · ไม่ส่ง LINE OA"]], s.LINE_OA_MODE || (s.MOPH_ENABLED === "1" ? "fallback" : "always"))}</select>`, "ใช้กับ เปิดกล่อง · แจ้งซ้ำ · ยาใกล้หมดอายุ · สรุปรายวัน")}
         ${field("โหมดการส่ง", `<select class="input" data-s="LINE_SEND_MODE">${opt([["broadcast", "Broadcast (ทุกคนที่เพิ่มเพื่อน)"], ["push", "Push (ระบุกลุ่ม/ผู้ใช้)"]], s.LINE_SEND_MODE || "broadcast")}</select>`)}
         ${field("แจ้งยาใกล้หมดอายุทาง LINE ตามรอบวัน", `<select class="input" data-s="LINE_EXPIRY_ALERTS">${opt([["1", "เปิด · ส่งเมื่อยาถึงรอบที่กำหนด (ครั้งเดียวต่อรอบ)"], ["0", "ปิด"]], s.LINE_EXPIRY_ALERTS ?? "1")}</select>`, "ส่งเวลา 08:00 น. เฉพาะวันที่มียาถึงรอบ ยาเดียวกันจะไม่ถูกแจ้งซ้ำในรอบเดิม")}

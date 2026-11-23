@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.20.3";
+const APP_VERSION = "2.21.0";
 const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -168,16 +168,16 @@ const actions: Record<string, Fn> = {
 const ROLES = ["admin", "pharmacist", "technician", "nurse", "viewer"];
 async function defaultPassword() { const s = await settingsObject(); return String(s.DEFAULT_PASSWORD || "1234"); }
 
-async function notifyAdmins(title: string, body: string) {
+async function notifyAdmins(title: string, body: string, link = "users", kind = "account") {
   const { data: admins } = await db.from("users").select("id").eq("role", "admin").eq("active", true);
   const ids = (admins || []).map((a: any) => a.id);
-  const nid = await recordNotice({ kind: "account", title, body, link: "users", audience: "admin" });
+  const nid = await recordNotice({ kind, title, body, link, audience: "admin" });
   if (!ids.length || !VAPID_PUBLIC_KEY) return;
-  const muted = await mutedUserIds("account");
+  const muted = await mutedUserIds(kind);
   const { data: subs0 } = await db.from("pushSubscriptions").select("*").eq("active", true).in("userId", ids.filter((x: string) => !muted.has(x)));
   const subs = subs0 || [];
-  const url = nid ? noticeUrl(nid) : `${appUrl()}#/users`;
-  await Promise.all((subs || []).map((s: any) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ title, body, tag: "account", url, nid }), { TTL: 86400 }).catch(() => null)));
+  const url = nid ? noticeUrl(nid) : `${appUrl()}#/${link}`;
+  await Promise.all((subs || []).map((s: any) => webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify({ title, body, tag: kind, url, nid, kind }), { TTL: 86400 }).catch(() => null)));
 }
 
 async function apiRegister(_c: Ctx, p: any) {
@@ -1617,7 +1617,7 @@ async function pushWithNotice(n: Notice, extra: any = {}) {
 }
 // ---------- ตั้งค่าการแจ้งเตือนรายบุคคล ----------
 // hide = ไม่แสดงในกล่องแจ้งเตือน/ไม่นับยังไม่อ่าน · mute = ไม่เด้ง Push บนเครื่องของคนนี้ (ทดสอบ = ส่งเสมอ)
-const NOTICE_KINDS = ["case", "escalate", "expiry", "daily", "account", "test"];
+const NOTICE_KINDS = ["case", "escalate", "expiry", "daily", "account", "test", "system"];
 function normPrefs(p: any) {
   const pick = (a: any, allowTest: boolean) => (Array.isArray(a) ? a.map(String).filter((k) => NOTICE_KINDS.includes(k) && (allowTest || k !== "test")) : []);
   return { hide: pick(p?.hide, true), mute: pick(p?.mute, false) };   // ทดสอบ: ซ่อนในระบบได้ แต่ Push ส่งถึงเสมอ
@@ -1627,7 +1627,7 @@ function normPrefs(p: any) {
 // settings.NOTIFY_USER_OVERRIDE = "1" ให้ผู้ใช้ปิดเรื่องที่ไม่บังคับเองได้ (ค่าเริ่มต้น) · "0" = ใช้ตามบทบาทเท่านั้น
 // ค่าเริ่มต้น = เหมือนเดิมทุกอย่าง (ทุกบทบาทได้ทุกเรื่อง ยกเว้น คำขอบัญชี/ทดสอบ เฉพาะ admin)
 function roleNoticeDefault(role: string, kind: string) {
-  if (kind === "account" || kind === "test") return role === "admin" ? { i: 1, p: 1, l: 0 } : { i: 0, p: 0, l: 0 };
+  if (kind === "account" || kind === "test" || kind === "system") return role === "admin" ? { i: 1, p: 1, l: 0 } : { i: 0, p: 0, l: 0 };
   return { i: 1, p: 1, l: 0 };
 }
 function roleNoticeRule(settings: any, role: string, kind: string) {
@@ -1823,7 +1823,23 @@ async function sendGroupThenLine(flex: any, settings: any, kind: string, allowLi
 // POST https://morpromt2f.moph.go.th/api/notify/send · header client-key / secret-key · body { messages: [LINE message] }
 // สำเร็จเมื่อ HTTP 2xx และ message_code = 200 · ไม่นับโควตา LINE OA ของโรงพยาบาล
 const MOPH_URL_DEFAULT = "https://morpromt2f.moph.go.th/api/notify/send";
+// เก็บสถานะล่าสุดของหมอพร้อม: ไม่สำเร็จ → settings.MOPH_LAST_ERROR (แสดงแถบแดงบนหน้าภาพรวมของ admin)
+// แจ้ง admin (กล่องแจ้งเตือน + Push) เฉพาะครั้งแรกที่เปลี่ยนจากปกติ → ไม่สำเร็จ · ส่งผ่านอีกครั้ง → ล้างสถานะ
 async function sendMoph(message: any, settings: any, kind: string) {
+  const r: any = await sendMophRaw(message, settings, kind);
+  if (r.skipped) return r;
+  try {
+    const prev = String(settings.MOPH_LAST_ERROR || "");
+    const put = (value: string) => db.from("settings").upsert({ key: "MOPH_LAST_ERROR", value, updatedAt: nowIso(), updatedBy: "system" }, { onConflict: "key" });
+    if (r.ok) { if (prev) await put(""); }
+    else {
+      await put(JSON.stringify({ at: nowIso(), kind, message: String(r.message || "").slice(0, 300) }));
+      if (!prev) await notifyAdmins("หมอพร้อมส่งเข้ากลุ่มไม่สำเร็จ", `${String(r.message || "").slice(0, 120)} · ตรวจ Client Key / Secret ที่ ตั้งค่า → การแจ้งเตือน`, "settings/notify", "system");
+    }
+  } catch (_) { /* บันทึกสถานะไม่ได้ ไม่ให้กระทบการส่ง */ }
+  return r;
+}
+async function sendMophRaw(message: any, settings: any, kind: string) {
   if (String(settings.MOPH_ENABLED || "0") !== "1") return { ok: false, skipped: true, message: "ปิดการส่งหมอพร้อม" };
   const kinds = String(settings.MOPH_KINDS ?? "open,escalate,expiry").split(",").map((x) => x.trim());
   if (kind !== "test" && !kinds.includes(kind)) return { ok: false, skipped: true, message: `ไม่ได้เลือกส่ง ${kind} เข้าหมอพร้อม` };
