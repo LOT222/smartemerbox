@@ -164,7 +164,7 @@ h4 { font-size: 13px; }
 .topbar.scrolled { border-bottom-color: var(--border); }
 .topbar h1 { font-size: 19px; }
 .topbar .crumb { font-size: 12px; color: var(--text-3); }
-.content { padding: 8px 28px 48px; max-width: 1360px; width: 100%; }
+.content { padding: 8px 28px 48px; max-width: 1720px; width: 100%; margin-inline: auto; }
 .mobile-only { display: none; }
 
 /* ---------- Bottom tabs (mobile) ---------- */
