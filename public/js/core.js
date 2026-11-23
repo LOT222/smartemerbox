@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.20.2";
+  const APP_VERSION = "2.20.3";
 
   const S = {
     demo: DEMO,

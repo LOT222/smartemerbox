@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.20.2";
+const APP_VERSION = "2.20.3";
 const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -1836,8 +1836,11 @@ async function sendMoph(message: any, settings: any, kind: string) {
     const text = await res.text();
     let j: any = null; try { j = JSON.parse(text); } catch { /* ไม่ใช่ JSON */ }
     // HTTP 2xx = หมอพร้อมรับไปแล้ว (บางครั้งไม่ส่ง message_code กลับมา) · ถือว่าไม่สำเร็จเฉพาะเมื่อมี message_code ที่ไม่ใช่ 200
+    // ถ้าคีย์ผิด หมอพร้อมยังตอบ HTTP 200 แต่ข้อความเป็น "Unauthorized" → ต้องนับเป็นไม่สำเร็จ
     const mc = j?.message_code ?? j?.status_code ?? null;
-    const ok = res.ok && (mc == null || Number(mc) === 200);
+    const msg = String(j?.message ?? j?.error ?? (j ? "" : text) ?? "");
+    const bad = /unauthori[sz]ed|forbidden|invalid|denied|error|fail|ไม่สำเร็จ|ผิดพลาด/i.test(msg);
+    const ok = res.ok && (mc != null ? Number(mc) === 200 : !bad);
     return { ok, status: res.status, code: j?.message_code, detail: `HTTP ${res.status}${j?.message_code != null ? ` · message_code ${j.message_code}` : ""} · ${(j?.message || text || "(ไม่มีข้อความตอบกลับ)").toString().slice(0, 240)}` };
   };
   try {
