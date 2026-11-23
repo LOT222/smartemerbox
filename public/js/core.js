@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.21.0";
+  const APP_VERSION = "2.22.0";
 
   const S = {
     demo: DEMO,
@@ -172,6 +172,23 @@
     const raw = S.data?.settings?.OPT_DRUG_NAMES;
     const lines = raw && String(raw).trim() ? optList("OPT_DRUG_NAMES") : drugsFromData();
     return lines.map((l) => { const [name, strength = "", unit = ""] = l.split("|").map((x) => x.trim()); return { name, strength, unit, label: l }; }).filter((x) => x.name);
+  };
+  // คีย์เทียบชื่อยา: ไม่สนตัวพิมพ์ วงเล็บ จุด ลำดับคำ และ sulph/sulf → ชื่อที่เขียนต่างกันแต่เป็นยาเดียวกันได้คีย์เดียวกัน
+  const drugNorm = (name) => String(name || "").toLowerCase().replace(/sulph/g, "sulf").replace(/[()[\]{},.;:_/\\-]+/g, " ").split(/\s+/).filter(Boolean).sort().join(" ");
+  // ชื่อในรายการยากลางที่คล้ายที่สุด (คีย์ตรงกัน หรือคำซ้อนกัน ≥ 60%) · ไม่มี = ""
+  const drugSuggest = (name) => {
+    const k = drugNorm(name); if (!k) return "";
+    const ta = new Set(k.split(" "));
+    let best = "", score = 0;
+    [...new Set(drugMaster().map((d) => d.name))].forEach((n) => {
+      if (n.toLowerCase() === String(name).trim().toLowerCase()) return;
+      const kb = drugNorm(n);
+      const tb = new Set(kb.split(" "));
+      const inter = [...ta].filter((t) => tb.has(t)).length;
+      const sc = kb === k ? 1 : inter / new Set([...ta, ...tb]).size;
+      if (sc > score) { score = sc; best = n; }
+    });
+    return score >= 0.6 ? best : "";
   };
   const drugKnown = (name) => { const n = String(name || "").trim().toLowerCase(); return !n || drugMaster().some((d) => d.name.toLowerCase() === n); };
   // datalist กลางสำหรับช่องหน่วยยาและชื่อยา
@@ -535,7 +552,7 @@
   window.SEB = {
     S, api, DEMO, IDLE_MS, Q, dateSel, dateSync, fmtDLong, sealOn, bannerHtml, renderBanner, hideBanner, fmtCE, datePick, dpMove, dpSet, dpClose, dtSel, dpTime, dpNow, dpOk, fmtBEdt,
     APP_VERSION, getTheme, setTheme, esc, ic, $, $$, val, fmtD, fmtT, fmtDT, ago, minutes, fmtMin, localInput, todayStr, daysUntil, initials, sum, uid, download, toCsv,
-    BOX_STATE, CASE_STATE, ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, LOGO_B, HOSP_LOGO, hospLogoAbs, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, isRealAdmin, withSim, LOGO,
+    BOX_STATE, CASE_STATE, ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, drugNorm, drugSuggest, LOGO_B, HOSP_LOGO, hospLogoAbs, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, isRealAdmin, withSim, LOGO,
     toast, fail, dialog, drawer, closeDrawer, kpi, empty, field, opt, renderShell, renderNav, setTitle, TITLES,
   };
 })();

@@ -1245,3 +1245,11 @@ html.dark .sys-banner.lv-warn { background: rgba(217,119,6,.16); color: #fef3c7;
 
 /* ช่องคีย์ลับ: ใช้ type=text + ปิดบังด้วย CSS เพื่อไม่ให้เบราว์เซอร์เติม/จำรหัสผ่านลงช่องนี้ */
 .secret-in:not(.show) { -webkit-text-security: disc; text-security: disc; }
+
+/* รวมชื่อยาซ้ำ */
+.mg-group { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.mg-group > .col { flex: 1; min-width: 0; }
+.mg-row { align-items: baseline; flex-wrap: wrap; }
+.mg-manual { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+@media (max-width: 760px) { .mg-group { flex-direction: column; align-items: stretch; } }
+.gap-8 { gap: 8px; }

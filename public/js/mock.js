@@ -246,6 +246,7 @@
     apiDeleteBox: (t, bid) => { need(t); boxes.splice(boxes.findIndex((b) => b.id === bid), 1); return { data: appData() }; },
     apiRegenerateQr: (t) => { need(t); return { data: appData() }; },
     apiSaveKit: (t, p) => { need(t); let k = kits.find((x) => x.id === p.id); if (!k) { k = { id: id("kit"), active: true }; kits.push(k); } Object.assign(k, { name: p.name, description: p.description, items: p.items.map((i, n) => ({ ...i, id: id("ki"), defaultQty: +i.defaultQty || 0, sortOrder: n + 1 })) }); return { kit: k, data: appData() }; },
+    apiMergeDrugNames: (t, p) => { need(t); const ns = new Set(p.names); const c = { boxItems: 0, kitItems: 0 }; const fix = (i, k) => { if (ns.has(i.drugName)) { i.drugName = p.toName; if (p.setStrength) i.strength = p.toStrength || ""; c[k]++; } }; boxes.forEach((b) => (b.items || []).forEach((i) => fix(i, "boxItems"))); kits.forEach((k) => (k.items || []).forEach((i) => fix(i, "kitItems"))); return { counts: c, data: appData() }; },
     apiDeleteKit: (t, kid) => { need(t); kits.splice(kits.findIndex((k) => k.id === kid), 1); return { data: appData() }; },
     apiSaveLocation: (t, p) => { need(t); let l = locations.find((x) => x.id === p.id); if (!l) { l = { id: id("loc") }; locations.push(l); } Object.assign(l, { name: p.name, code: p.code, unitType: p.unitType, zone: p.zone, sortOrder: +p.sortOrder || 0, inStudy: p.inStudy, active: p.active, note: p.note }); return { data: appData() }; },
     apiListInspections: (t) => { need(t); return { inspections }; },

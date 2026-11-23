@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.21.0";
+const APP_VERSION = "2.22.0";
 const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -115,6 +115,7 @@ const actions: Record<string, Fn> = {
   apiRegenerateQr,
   apiSaveKit,
   apiDeleteKit,
+  apiMergeDrugNames,
   apiSaveLocation,
   apiDeleteLocation,
   apiListInspections,
@@ -1005,6 +1006,55 @@ async function apiSaveKit(_c: Ctx, token: string, p: any) {
   }
   await audit(user, "save_kit", { id: kit.id });
   return { kit, data: await buildAppData(user) };
+}
+
+// รวมชื่อยาซ้ำ (admin): เปลี่ยนชื่อยาทุกแห่งให้เป็นชื่อเดียว · จำนวน lot วันหมดอายุไม่เปลี่ยน
+// p = { names: string[] (ชื่อเดิมที่จะรวม), toName: string, toStrength?: string, setStrength?: boolean }
+async function apiMergeDrugNames(_c: Ctx, token: string, p: any) {
+  const user = await requireAdmin(token);
+  const names = [...new Set((p?.names || []).map((x: any) => String(x ?? "").trim()).filter(Boolean))] as string[];
+  const toName = String(p?.toName || "").trim();
+  if (!toName) throw new Error("ระบุชื่อยาที่ถูกต้อง");
+  if (!names.length) throw new Error("ยังไม่ได้เลือกชื่อที่จะรวม");
+  const patch: any = { drugName: toName };
+  if (p?.setStrength) patch.strength = String(p?.toStrength ?? "").trim();
+  const counts: Record<string, number> = {};
+  for (const t of ["boxItems", "kitItems", "stockMoves", "inspectionItems"]) {
+    const { data, error } = await db.from(t).update(patch).in("drugName", names).select("id");
+    if (error) throw new Error(`${t}: ${error.message}`);
+    counts[t] = (data || []).length;
+  }
+  // กันแจ้งเตือนยาใกล้หมดอายุซ้ำ: alertKey = boxId|drugName|lot|expiryDate → เปลี่ยนชื่อในคีย์ด้วย
+  const { data: al } = await db.from("expiryAlerts").select("alertKey,milestone,drugName").in("drugName", names);
+  let alerts = 0;
+  for (const a of al || []) {
+    const parts = String(a.alertKey || "").split("|");
+    if (parts.length >= 4) parts[1] = toName;
+    const nk = parts.join("|");
+    const { error } = await db.from("expiryAlerts").update({ drugName: toName, alertKey: nk }).eq("alertKey", a.alertKey).eq("milestone", a.milestone);
+    if (!error) alerts++;
+  }
+  counts.expiryAlerts = alerts;
+  // รายการยากลาง (ถ้าตั้งไว้): เอาชื่อเดิมออก ใส่ชื่อที่ถูกต้องแทนที่ตำแหน่งแรก
+  const s = await settingsObject();
+  const raw = String(s.OPT_DRUG_NAMES || "").trim();
+  if (raw) {
+    const lower = new Set([...names, toName].map((n) => n.toLowerCase()));
+    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+    let at = -1, unit = "", strength = "";
+    const keep: string[] = [];
+    lines.forEach((l) => {
+      const [n, st = "", u = ""] = l.split("|").map((x) => x.trim());
+      if (lower.has(n.toLowerCase())) { if (at < 0) { at = keep.length; } unit = unit || u; strength = strength || st; }
+      else keep.push(l);
+    });
+    const st2 = p?.setStrength ? String(p?.toStrength ?? "").trim() : strength;
+    const line = [toName, st2, unit].join(" | ").replace(/( \| )+$/, "");
+    keep.splice(at < 0 ? keep.length : at, 0, line);
+    await db.from("settings").upsert({ key: "OPT_DRUG_NAMES", value: keep.join("\n"), updatedAt: nowIso(), updatedBy: user.username }, { onConflict: "key" });
+  }
+  await audit(user, "merge_drug_names", { names, toName, toStrength: p?.setStrength ? patch.strength : undefined, counts });
+  return { counts, data: await buildAppData(user) };
 }
 
 async function apiDeleteKit(_c: Ctx, token: string, kitId: string) {

@@ -4,7 +4,7 @@
 (function () {
   const X = window.SEB;
   const { S, api, esc, ic, $, $$, val, fmtD, fmtT, fmtDT, ago, minutes, fmtMin, localInput, daysUntil, initials, download, toCsv,
-    ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, toast, fail, dialog, drawer, closeDrawer,
+    ROLE, ROLE_PICK, UNIT_TYPES, REASONS, OPTION_LISTS, optList, syncLists, drugMaster, drugsFromData, drugKnown, drugPicked, drugNorm, drugSuggest, boxPill, casePill, expPill, nearDays, isStaff, canRecord, isAdmin, toast, fail, dialog, drawer, closeDrawer,
     kpi, empty, field, opt, setTitle, dateSel, fmtDLong, sealOn } = X;
   const App = window.App;
 
@@ -444,6 +444,7 @@
 
   App.saveBox = withBusy("#bxBtn", async (id) => {
     App.closeDrugSheet();
+    await App.checkDrugNames($$('#itemsTable [data-g="drugName"]'));
     App.itemFlags();
     const probs = (App._issues || []).filter((x) => x.iss.list.length);
     let reason;
@@ -1038,6 +1039,7 @@
       `${id && isAdmin() ? `<button class="btn danger-ghost" onclick="App.deleteKit('${id}')">ลบ</button><span class="grow"></span>` : ""}<button class="btn ghost" onclick="App.closeDrawer()">ยกเลิก</button>${isStaff() ? `<button class="btn primary" id="kBtn" onclick="App.saveKit('${id || ""}')">บันทึก</button>` : ""}`, { wide: true });
   };
   App.saveKit = withBusy("#kBtn", async (id) => {
+    await App.checkDrugNames($$('#kitTable [data-f="drugName"]'));
     const items = $$("#kitTable [data-kit]").map((tr) => { const o = {}; tr.querySelectorAll("[data-f]").forEach((el) => (o[el.dataset.f] = el.value.trim())); return o; }).filter((o) => o.drugName);
     if (!val("kName")) throw new Error("กรุณาระบุชื่อชุด");
     const r = await api("apiSaveKit", S.token, { id: id || undefined, name: val("kName"), description: val("kDesc"), items });
@@ -1199,6 +1201,77 @@
     $$("[data-ip]").forEach((b) => b.classList.toggle("on", parts.includes(list[+b.dataset.ip])));
   };
 
+  // ---------- รวมชื่อยาซ้ำ (admin) ----------
+  // ดึงชื่อยาทุกแบบที่มีในกล่องและชุดยามาตรฐาน → จัดกลุ่มด้วย drugNorm → เลือกชื่อที่ถูกต้องแล้วรวม
+  function drugVariants() {
+    const m = new Map();
+    const add = (n, st, where, kind) => {
+      n = String(n || "").trim(); if (!n) return;
+      if (!m.has(n)) m.set(n, { name: n, st: new Map(), boxes: new Set(), kits: new Set(), rows: 0 });
+      const v = m.get(n); v.rows++;
+      const k = String(st || "").trim(); v.st.set(k, (v.st.get(k) || 0) + 1);
+      (kind === "box" ? v.boxes : v.kits).add(where);
+    };
+    (D().boxes || []).forEach((b) => (b.items || []).forEach((i) => add(i.drugName, i.strength, b.boxCode, "box")));
+    (D().kits || []).forEach((k) => (k.items || []).forEach((i) => add(i.drugName, i.strength, k.name, "kit")));
+    return [...m.values()];
+  }
+  const vInfo = (v) => `${v.boxes.size ? `${v.boxes.size} กล่อง` : ""}${v.boxes.size && v.kits.size ? " · " : ""}${v.kits.size ? `${v.kits.size} ชุดยา` : ""}${[...v.st.keys()].filter(Boolean).length ? ` · ${[...v.st.keys()].filter(Boolean).map(esc).join(", ")}` : ""}`;
+  function mergeCard() {
+    const vs = drugVariants();
+    const groups = new Map();
+    vs.forEach((v) => { const k = drugNorm(v.name); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(v); });
+    const dup = [...groups.values()].filter((g) => g.length > 1).sort((a, b) => a[0].name.localeCompare(b[0].name));
+    App._mgAll = vs;
+    const grp = (g, gi) => `<div class="mg-group"><div class="col gap-4">${g.map((v) => `<label class="row gap-8 small mg-row"><input type="checkbox" data-mgg="${gi}" value="${esc(v.name)}" checked><b>${esc(v.name)}</b><span class="faint">${vInfo(v)}</span></label>`).join("")}</div>
+      <button class="btn sm primary" onclick="App.mergeOpen([...document.querySelectorAll('[data-mgg=&quot;${gi}&quot;]:checked')].map((x)=>x.value))">${ic("arrows-exchange")} รวม…</button></div>`;
+    return `<div class="card mt-16"><div class="card-head"><div class="grow"><h3>รวมชื่อยาซ้ำ</h3><div class="xs faint">ชื่อที่เขียนต่างกันแต่เป็นยาตัวเดียวกัน (ตัวพิมพ์ วงเล็บ ลำดับคำ) · เลือกชื่อที่ถูกต้อง 1 ชื่อ ระบบเปลี่ยนให้ทุกกล่อง ชุดยามาตรฐาน และรายการยากลาง · จำนวน lot วันหมดอายุไม่เปลี่ยน</div></div><span class="pill ${dup.length ? "warn" : "ok"}">${dup.length ? `พบ ${dup.length} กลุ่ม` : "ไม่พบชื่อซ้ำ"}</span></div>
+      <div class="card-body">${dup.length ? `<div class="col gap-12">${dup.map(grp).join("")}</div>` : `<div class="muted small">ระบบจับกลุ่มอัตโนมัติไม่พบชื่อซ้ำ</div>`}
+      <details class="mt-16"><summary class="small" style="cursor:pointer"><b>รวมเอง</b> · สำหรับชื่อที่ระบบจับกลุ่มให้ไม่ได้ (เช่น ชื่อสามัญกับชื่อการค้า)</summary>
+        <input class="input sm mt-12" placeholder="ค้นหาชื่อยา" oninput="App.mgFilter(this.value)">
+        <div class="col gap-4 mt-8 mg-manual" id="mgManual">${vs.slice().sort((a, b) => a.name.localeCompare(b.name)).map((v) => `<label class="row gap-8 small mg-row" data-mgn="${esc(v.name.toLowerCase())}"><input type="checkbox" data-mgm value="${esc(v.name)}"><span>${esc(v.name)}</span><span class="faint">${vInfo(v)}</span></label>`).join("")}</div>
+        <div class="row mt-12" style="justify-content:flex-end"><button class="btn sm primary" onclick="App.mergeOpen([...document.querySelectorAll('[data-mgm]:checked')].map((x)=>x.value))">${ic("arrows-exchange")} รวมรายการที่เลือก</button></div>
+      </details></div></div>`;
+  }
+  App.mgFilter = (q) => { q = q.trim().toLowerCase(); $$("#mgManual [data-mgn]").forEach((r) => (r.style.display = !q || r.dataset.mgn.includes(q) ? "" : "none")); };
+  App.mergeOpen = async (names) => {
+    names = [...new Set(names)];
+    if (names.length < 2) return toast("เลือกอย่างน้อย 2 ชื่อ", true);
+    const vs = (App._mgAll || []).filter((v) => names.includes(v.name));
+    const master = new Set(drugMaster().map((d) => d.name));
+    const def = vs.find((v) => master.has(v.name) && S.data?.settings?.OPT_DRUG_NAMES) || vs.slice().sort((a, b) => b.rows - a.rows)[0];
+    const stCount = new Map(); vs.forEach((v) => v.st.forEach((c, k) => { if (k) stCount.set(k, (stCount.get(k) || 0) + c); }));
+    const defSt = [...stCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+    App._mg = { names, toName: def.name, toStrength: defSt, setStrength: stCount.size > 0 };
+    const body = `<div class="col gap-8 mt-4">${vs.map((v) => `<label class="row gap-8 mg-row" style="white-space:normal"><input type="radio" name="mgTo" value="${esc(v.name)}" ${v === def ? "checked" : ""} onchange="App._mg.toName=this.value;document.getElementById('mgName').value=this.value"><span><b>${esc(v.name)}</b> <span class="faint small">${vInfo(v)}</span></span></label>`).join("")}</div>
+      <div class="field mt-12"><span>ชื่อที่จะใช้ (แก้การสะกดได้)</span><input class="input" id="mgName" value="${esc(def.name)}" oninput="App._mg.toName=this.value"></div>
+      ${stCount.size ? `<label class="row gap-8 small mt-12"><input type="checkbox" ${App._mg.setStrength ? "checked" : ""} onchange="App._mg.setStrength=this.checked"> ตั้งความแรงเป็นค่าเดียวกันทุกรายการ</label><input class="input sm mt-4" value="${esc(defSt)}" oninput="App._mg.toStrength=this.value" placeholder="ความแรง">` : ""}
+      <div class="small mt-12">จะเปลี่ยนชื่อในทุกกล่อง ชุดยามาตรฐาน ประวัติการเติม/ตรวจ และรายการยากลาง · บันทึกใน audit log</div>`;
+    if (!(await dialog({ title: `รวม ${names.length} ชื่อเป็นชื่อเดียว`, body, confirm: "รวมชื่อ" }))) return;
+    const m = App._mg;
+    if (!String(m.toName || "").trim()) return toast("ระบุชื่อยาที่ถูกต้อง", true);
+    try {
+      const r = await api("apiMergeDrugNames", S.token, { names: m.names, toName: m.toName.trim(), toStrength: m.toStrength, setStrength: !!m.setStrength });
+      S.data = r.data; syncLists();
+      const c = r.counts || {};
+      toast(`รวมแล้ว · ในกล่อง ${c.boxItems || 0} · ชุดยา ${c.kitItems || 0} รายการ`);
+      App.render();
+    } catch (e) { fail(e); }
+  };
+
+  // ก่อนบันทึก: ชื่อยาที่ไม่อยู่ในรายการยากลางแต่คล้ายชื่อที่มี → ถามว่าเป็นตัวเดียวกันไหม
+  App.checkDrugNames = async (inputs) => {
+    const hits = [];
+    inputs.forEach((inp) => { const v = inp.value.trim(); if (v && !drugKnown(v)) { const sug = drugSuggest(v); if (sug) hits.push({ inp, v, sug }); } });
+    if (!hits.length) return true;
+    const uniq = [...new Map(hits.map((h) => [h.v + "→" + h.sug, h])).values()];
+    const ok = await dialog({ title: "ชื่อยาคล้ายกับที่มีอยู่แล้ว",
+      body: `${uniq.map((h) => `<div class="dlg-iss"><div>พิมพ์: <b>${esc(h.v)}</b></div><div>ในรายการ: <b>${esc(h.sug)}</b></div></div>`).join("")}<div class="small mt-12">ถ้าเป็นยาตัวเดียวกัน ให้ใช้ชื่อในรายการ เพื่อให้รายงานและสถิติรวมกันถูกต้อง</div>`,
+      confirm: "ใช้ชื่อในรายการ", cancel: "คงชื่อที่พิมพ์" });
+    if (ok) hits.forEach((h) => { h.inp.value = h.sug; drugPicked(h.inp); });
+    return true;
+  };
+
   // ---------- จัดการรายการตัวเลือก (admin) ----------
   function optionsTab() {
     const s = D().settings;
@@ -1275,7 +1348,7 @@
         <div class="card card-pad mt-16"><h3>เกณฑ์การทำงาน</h3><div class="form-grid mt-16">${field("ระบบเลขซีล", `<select class="input" data-s="SEAL_ENABLED">${opt([["0", "ปิด · ซ่อนช่องเลขซีลทุกหน้า (ยังไม่มีซีลใช้)"], ["1", "เปิด · บันทึก/แสดงเลขซีลกล่อง"]], s.SEAL_ENABLED ?? "0")}</select>`, "เปิดเมื่อเริ่มใช้ซีลล็อกกล่องที่มีเลขกำกับ · ข้อมูลเลขซีลเดิมยังเก็บไว้")}${sf("NEAR_EXPIRY_DAYS", "ใกล้หมดอายุ (วัน)", "number")}${sf("INSPECTION_INTERVAL_DAYS", "รอบตรวจกล่อง (วัน)", "number")}${sf("RESPONSE_TARGET_MIN", "เป้าหมายตอบสนอง (นาที)", "number")}${sf("ESCALATE_AFTER_MIN", "แจ้งซ้ำถ้าไม่มีผู้รับทราบ (นาที)", "number")}${sf("PUBLIC_OPEN_COOLDOWN_SEC", "กันสแกนซ้ำ (วินาที)", "number")}${sf("DEFAULT_PASSWORD", "รหัสผ่านเริ่มต้น")}${field("สมัครสมาชิกเอง", `<select class="input" data-s="ALLOW_SIGNUP">${opt([["1", "เปิด (รอผู้ดูแลอนุมัติ)"], ["0", "ปิด"]], s.ALLOW_SIGNUP ?? "1")}</select>`)}</div>
         <div class="row mt-16" style="justify-content:flex-end"><button class="btn primary" id="setBtn" onclick="App.saveSettings()">บันทึก</button></div></div>`;
     } else if (t === "options") {
-      body = `<div class="card card-pad"><h3>รายการตัวเลือก</h3><div class="muted small mt-4">ข้อความที่ผู้ใช้เลือกแทนการพิมพ์ เพิ่ม ลบ แก้ หรือสลับลำดับได้เอง การแก้ไขไม่กระทบข้อมูลที่บันทึกไปแล้ว</div></div>${optionsTab()}`;
+      body = `<div class="card card-pad"><h3>รายการตัวเลือก</h3><div class="muted small mt-4">ข้อความที่ผู้ใช้เลือกแทนการพิมพ์ เพิ่ม ลบ แก้ หรือสลับลำดับได้เอง การแก้ไขไม่กระทบข้อมูลที่บันทึกไปแล้ว</div></div>${mergeCard()}${optionsTab()}`;
     } else if (t === "notify") {
       const mk = String(s.MOPH_KINDS ?? "open,escalate,expiry").split(",").map((x) => x.trim());
       const mkBox = (k, l) => `<label class="row gap-8 small" style="cursor:pointer"><input type="checkbox" data-mk="${k}" ${mk.includes(k) ? "checked" : ""} onchange="App.mophKinds()"> ${l}</label>`;
