@@ -228,7 +228,7 @@
     ST = { kind, cfg: load(kind), ids: o.ids || [], boxId: o.boxId || "" };
     if (kind === "record") {
       const b = D().boxes.find((x) => x.id === ST.boxId);
-      ST.cfg.fields = { name: b.boxCode, date: thDate(new Date().toISOString()), location: b.location || "", inspector: S.user.displayText || S.user.displayName };
+      ST.cfg.fields = { name: b.boxCode, date: thDate(new Date().toISOString()), location: b.location || "", inspector: b.lastFilledBy || S.user.displayText || S.user.displayName };  // ผู้ตรวจ = คนที่ใส่ยาครั้งล่าสุด (ไม่มีประวัติ = ผู้พิมพ์)
     }
     const title = { qr: "พิมพ์ฉลาก QR (ติดกล่องถาวร)", appt: "พิมพ์ฉลากนัดตรวจ", record: "พิมพ์ใบบันทึกรายการยา" }[kind];
     drawer(title, `<div class="print-layout"><div id="prCtl"></div><div class="print-preview" id="prPrev"><iframe id="prFrame" title="ตัวอย่างก่อนพิมพ์"></iframe></div></div>`,

@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.22.0";
+const APP_VERSION = "2.22.2";
 const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -516,7 +516,20 @@ async function buildAppData(user: any) {
     db.from("openEvents").select("*").order("actualOpenedAt", { ascending: false }).limit(400).then(rowsOf),
     db.from("pushSubscriptions").select("id", { count: "exact", head: true }).eq("active", true).then((r: any) => r.count || 0),
   ]);
-  const fullBoxes = boxes.map((b: any) => decorateBox(b, boxItems.filter((i: any) => i.boxId === b.id), events, locations, settings));
+  // ผู้ใส่ยาล่าสุดของแต่ละกล่อง (เติม/เปลี่ยน lot/ปรับจำนวน) → ใช้เป็น "ผู้ตรวจ" ในใบบันทึกรายการยาที่พิมพ์ติดกล่อง
+  const [moves, people] = await Promise.all([
+    db.from("stockMoves").select("boxId,byUser,at").neq("type", "use").order("at", { ascending: false }).limit(3000).then(rowsOf),
+    db.from("users").select("displayName,position").then(rowsOf),
+  ]);
+  const pos = new Map<string, string>(people.map((u: any) => [String(u.displayName || ""), String(u.position || "")]));
+  const lastFill = new Map<string, any>();
+  for (const m of moves) if (m.boxId && m.byUser && !lastFill.has(m.boxId)) lastFill.set(m.boxId, m);
+  const fullBoxes = boxes.map((b: any) => {
+    const d: any = decorateBox(b, boxItems.filter((i: any) => i.boxId === b.id), events, locations, settings);
+    const f = lastFill.get(b.id);
+    if (f) { const ps = pos.get(String(f.byUser)) || ""; d.lastFilledBy = ps ? `${f.byUser}, ${ps}` : f.byUser; d.lastFilledAt = f.at; }
+    return d;
+  });
   return {
     settings: sanitizeSettings(settings),
     locations,
