@@ -21,7 +21,7 @@
   applyTheme();
   try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme); } catch (_) {}
   // เลขรุ่นหน้าเว็บ — ต้องตรงกับ APP_VERSION ใน supabase/functions/api/index.ts และ VERSION ใน sw.js (ดู CHANGELOG.md)
-  const APP_VERSION = "2.22.2";
+  const APP_VERSION = "2.22.3";
 
   const S = {
     demo: DEMO,
@@ -269,6 +269,16 @@
       dl.querySelector('[data-r="1"]').onclick = () => {
         if (input) { const v = $("#dlgInput").value.trim(); if (input.required && !v) { $("#dlgInput").classList.add("err"); return; } close(v); } else close(true);
       };
+      // input.match: ต้องพิมพ์ข้อความให้ตรง (ไม่สนตัวพิมพ์/ช่องว่างหัวท้าย) ปุ่มยืนยันถึงจะกดได้ · กันกดพลาดในงานที่ย้อนกลับไม่ได้
+      if (input?.match) {
+        const want = String(input.match).trim().toLowerCase();
+        const inp = dl.querySelector("#dlgInput"), ok = dl.querySelector('[data-r="1"]');
+        inp.setAttribute("autocomplete", "off"); inp.setAttribute("spellcheck", "false");
+        const sync = () => { ok.disabled = inp.value.trim().toLowerCase() !== want; };
+        inp.addEventListener("input", sync); sync();
+        const go = ok.onclick; ok.onclick = () => { if (ok.disabled) { inp.classList.add("err"); return; } go(); };
+        inp.addEventListener("keydown", (e) => { if (e.key === "Enter" && !ok.disabled) ok.click(); });
+      }
       document.body.append(ov, dl);
       if (!ch.length) setTimeout(() => ($("#dlgInput") || dl.querySelector('[data-r="1"]')).focus(), 30);
     });

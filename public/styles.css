@@ -1257,3 +1257,9 @@ html.dark .sys-banner.lv-warn { background: rgba(217,119,6,.16); color: #fef3c7;
 /* กล่องยืนยันที่เนื้อหายาว (เช่น รายการยาไม่ตรงมาตรฐานตอนบันทึก): ไม่ล้นจอ เลื่อนดูในกล่อง ปุ่มยืนยันติดด้านล่างเสมอ */
 .dialog { max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
 .dialog .dlg-foot { position: sticky; bottom: -22px; margin: 16px -22px -22px; padding: 12px 22px calc(14px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--border); }
+
+/* ปุ่มใต้ QR: 2 คอลัมน์ ไม่ล้นการ์ด */
+.qr-acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.qr-acts .btn { width: 100%; justify-content: center; white-space: nowrap; }
+.btn.danger-text { color: var(--danger, #c62828); }
+.dialog .btn:disabled { opacity: 0.45; cursor: not-allowed; }

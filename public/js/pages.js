@@ -379,7 +379,7 @@
           <div class="card card-pad center">
             <div style="width:168px;margin:0 auto" class="qr">${qrSvg}</div>
             <div class="xs faint mt-8">QR สำหรับหน้างาน · สแกนแล้วบันทึกการเปิดได้ทันที</div>
-            <div class="row mt-12" style="justify-content:center"><button class="btn sm" onclick="App.printQr(['${b.id}'])">${ic("printer")} พิมพ์ฉลาก</button><button class="btn sm" title="เปิดหน้าที่พยาบาลเห็นหลังสแกน บนเว็บที่ใช้อยู่ตอนนี้" onclick="App.tryQr('${b.id}')">${ic("qrcode")} ทดลองสแกน</button><button class="btn sm" onclick="navigator.clipboard.writeText('${esc(b.qrUrl)}').then(()=>SEB.toast('คัดลอกลิงก์แล้ว'))">${ic("copy")} ลิงก์</button>${isAdmin() ? `<button class="btn sm ghost" title="สร้าง QR ใหม่ (ฉลากเดิมจะใช้ไม่ได้)" onclick="App.regenQr('${b.id}')">${ic("refresh")}</button>` : ""}</div>
+            <div class="qr-acts mt-12"><button class="btn sm" onclick="App.printQr(['${b.id}'])">${ic("printer")} พิมพ์ฉลาก</button><button class="btn sm" title="เปิดหน้าที่พยาบาลเห็นหลังสแกน บนเว็บที่ใช้อยู่ตอนนี้" onclick="App.tryQr('${b.id}')">${ic("qrcode")} ทดลองสแกน</button><button class="btn sm" onclick="navigator.clipboard.writeText('${esc(b.qrUrl)}').then(()=>SEB.toast('คัดลอกลิงก์แล้ว'))">${ic("copy")} ลิงก์</button>${isAdmin() ? `<button class="btn sm ghost danger-text" title="สร้าง QR ใหม่ (ฉลากเดิมจะใช้ไม่ได้)" onclick="App.regenQr('${b.id}')">${ic("refresh")} สร้าง QR ใหม่</button>` : ""}</div>
           </div>
           <div class="card card-pad small">
             <div class="row between"><span class="muted">ตรวจล่าสุด</span><span>${fmtD(b.lastInspectedAt)}</span></div>
@@ -471,7 +471,11 @@
     try { const r = await api("apiDeleteBox", S.token, id); S.data = r.data; toast("ลบแล้ว"); App.go("boxes"); } catch (e) { fail(e); }
   };
   App.regenQr = async (id) => {
-    if (!(await dialog({ title: "สร้าง QR ใหม่?", body: "ฉลาก QR เดิมที่ติดกล่องจะใช้ไม่ได้ทันที ต้องพิมพ์ฉลากใหม่", confirm: "สร้างใหม่", danger: true }))) return;
+    const bx = D().boxes.find((x) => x.id === id); if (!bx) return;
+    const v = await dialog({ title: `สร้าง QR ใหม่ให้ ${bx.boxCode}?`,
+      body: `ฉลาก QR เดิมที่ติดกล่องนี้<b>จะสแกนไม่ได้ทันที</b> พยาบาลจะเปิดกล่องผ่าน QR ไม่ได้จนกว่าจะพิมพ์ฉลากใหม่มาติด\nใช้เมื่อฉลากหาย ชำรุด หรือสงสัยว่าลิงก์รั่วไหลเท่านั้น\n\nพิมพ์รหัสกล่อง <b>${esc(bx.boxCode)}</b> เพื่อยืนยัน`,
+      input: { placeholder: bx.boxCode, match: bx.boxCode }, confirm: "สร้าง QR ใหม่", danger: true });
+    if (!v) return;
     try { const r = await api("apiRegenerateQr", S.token, id); S.data = r.data; toast("สร้าง QR ใหม่แล้ว"); App.render(); } catch (e) { fail(e); }
   };
 
