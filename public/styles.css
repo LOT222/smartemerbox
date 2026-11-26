@@ -1253,3 +1253,7 @@ html.dark .sys-banner.lv-warn { background: rgba(217,119,6,.16); color: #fef3c7;
 .mg-manual { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
 @media (max-width: 760px) { .mg-group { flex-direction: column; align-items: stretch; } }
 .gap-8 { gap: 8px; }
+
+/* กล่องยืนยันที่เนื้อหายาว (เช่น รายการยาไม่ตรงมาตรฐานตอนบันทึก): ไม่ล้นจอ เลื่อนดูในกล่อง ปุ่มยืนยันติดด้านล่างเสมอ */
+.dialog { max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+.dialog .dlg-foot { position: sticky; bottom: -22px; margin: 16px -22px -22px; padding: 12px 22px calc(14px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--border); }
