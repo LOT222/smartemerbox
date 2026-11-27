@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 // เลขรุ่น backend — ต้องตรงกับ APP_VERSION ใน public/js/core.js (ดู CHANGELOG.md)
-const APP_VERSION = "2.23.0";
+const APP_VERSION = "2.24.0";
 const SCHEMA_REQUIRED = 8; // migration ล่าสุดที่ backend รุ่นนี้ต้องใช้
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -94,6 +94,7 @@ const actions: Record<string, Fn> = {
   apiBackup,
   apiOpenBoxPublic,
   apiSubmitSurveyV2,
+  apiImportSurvey,
   apiCron,
   apiSheetExport,
 
@@ -1423,6 +1424,46 @@ async function apiSubmitSurveyV2(_c: Ctx, p: any) {
     accepted: Number(L.q21) >= 4 && Number(L.q22) >= 4,
   });
   return { ok: true };
+}
+
+// นำเข้าคำตอบจาก Google Form (CSV จาก Google Sheet) · admin · รหัสผู้ตอบเดิม = แทนที่ (นำเข้าซ้ำได้)
+// ข้อที่ไม่ได้ตอบ (Google Form ไม่บังคับ) ไม่นับในค่าเฉลี่ยรายมิติ
+async function apiImportSurvey(_c: Ctx, token: string, p: any) {
+  const user = await requireAdmin(token);
+  const rows: any[] = Array.isArray(p?.rows) ? p.rows : [];
+  if (!rows.length) throw new Error("ไม่พบคำตอบในไฟล์");
+  if (rows.length > 500) throw new Error("ไฟล์มีคำตอบมากเกิน 500 แถว");
+  const out: any[] = [];
+  for (const r of rows) {
+    const code = String(r.respondentCode || "").trim();
+    if (!code) continue;
+    const L: Record<string, number> = {};
+    for (let i = 1; i <= 22; i++) { const v = Number(r.likert?.[`q${i}`]); if (v >= 1 && v <= 5) L[`q${i}`] = v; }
+    const C: Record<string, number> = {};
+    for (let i = 1; i <= 6; i++) { const v = Number(r.comparisons?.[`c${i}`]); if (v >= 1 && v <= 5) C[`c${i}`] = v; }
+    const avg = (ks: number[]) => { const a = ks.map((k) => L[`q${k}`]).filter((v) => v != null); return a.length ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 100) / 100 : null; };
+    const t = r.submittedAt ? new Date(r.submittedAt) : null;
+    const O: Record<string, string> = {};
+    for (let i = 1; i <= 5; i++) O[`o${i}`] = String(r.openAnswers?.[`o${i}`] || "").slice(0, 4000);
+    out.push({
+      respondentCode: code.slice(0, 40), consent: true, submittedAt: t && !isNaN(+t) ? t.toISOString() : nowIso(),
+      gender: String(r.gender || ""), ageGroup: String(r.ageGroup || ""), profession: String(r.profession || ""), professionOther: String(r.professionOther || ""),
+      experience: String(r.experience || ""), usageFrequency: String(r.usageFrequency || ""), smartphoneSkill: String(r.smartphoneSkill || ""),
+      likert: L, comparisons: C, openAnswers: O,
+      usabilityScore: avg([1, 2, 3, 4, 5]), performanceScore: avg([6, 7, 8, 9, 10]), usefulnessScore: avg([11, 12, 13, 14, 15]),
+      trustScore: avg([16, 17, 18, 19]), acceptanceScore: avg([20, 21, 22]), overallScore: avg(Array.from({ length: 22 }, (_, i) => i + 1)),
+      accepted: (L.q21 ?? 0) >= 4 && (L.q22 ?? 0) >= 4,
+    });
+  }
+  if (!out.length) throw new Error("ไม่มีแถวที่มีรหัสผู้ตอบ");
+  const codes = [...new Set(out.map((x) => x.respondentCode))];
+  if (codes.length !== out.length) throw new Error("ในไฟล์มีรหัสผู้ตอบซ้ำกัน กรุณาตรวจสอบใน Google Sheet ก่อน");
+  const { data: old } = await db.from("surveyV2").select("id").in("respondentCode", codes);
+  if (old?.length) { const { error } = await db.from("surveyV2").delete().in("respondentCode", codes); if (error) throw new Error(error.message); }
+  const { error } = await db.from("surveyV2").insert(out);
+  if (error) throw new Error(error.message);
+  await audit(user, "import_survey", { rows: out.length, replaced: old?.length || 0, source: "google_form_csv" });
+  return { imported: out.length, replaced: old?.length || 0, skipped: rows.length - out.length };
 }
 
 // =====================================================================

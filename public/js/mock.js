@@ -305,6 +305,7 @@
     apiListConsents: (t) => { need(t); return { users: users.filter((u) => u.active).map((u) => ({ ...u, consent: noSig(myC(u.id)) })) }; },
     apiGetConsent: (t, cid) => { need(t); const r = cid === "mine" ? myC(session.id) : consents.find((c) => c.id === cid); if (!r) err("ไม่พบเอกสาร"); return { record: r }; },
     apiConsentReceive: (t, cid) => { need(t); const r = consents.find((c) => c.id === cid); Object.assign(r, { receivedBy: session.displayName, receivedAt: iso(now()) }); return { record: noSig(r) }; },
+    apiImportSurvey: (t, p) => { need(t); const rows = (p.rows || []).filter((r) => r.respondentCode); rows.forEach((r) => { const i = survey.findIndex((x) => x.respondentCode === r.respondentCode); const L = r.likert || {}; const v = Object.values(L).map(Number); const rec = { id: id("sv"), consent: true, ...r, overallScore: v.length ? v.reduce((a, b) => a + b, 0) / v.length : null, accepted: L.q21 >= 4 && L.q22 >= 4 }; if (i >= 0) survey[i] = rec; else survey.push(rec); }); return { imported: rows.length, replaced: 0, skipped: (p.rows || []).length - rows.length }; },
     apiSubmitSurveyV2: (p) => { if (!p.consent) err("กรุณายืนยันความยินยอม"); survey.push({ id: id("sv"), ...p, overallScore: 4 }); return { ok: true }; },
   };
   function newEvent(b, p, source) {

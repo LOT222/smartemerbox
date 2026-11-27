@@ -375,8 +375,94 @@
     return `<div class="card card-pad"><h3>Google Form (ภาคผนวก ข)</h3><div class="muted small mt-4">ตามโครงการที่ EC รับรอง: ตอบผ่าน Google Form หรือกระดาษ · ใส่ลิงก์แล้ว ผู้ที่ยินยอมเข้าร่วมวิจัยจะเห็นปุ่ม "ตอบแบบสอบถาม" บนหน้าภาพรวม</div>
       <label class="field mt-12"><span>ลิงก์ส่งให้ผู้ตอบ (https://docs.google.com/forms/… หรือ forms.gle/…)</span><input class="input mono" id="gfUrl" value="${esc(u)}" placeholder="https://forms.gle/…"></label>
       <label class="row mt-12" style="gap:12px"><span class="switch"><input type="checkbox" id="gfOpen" ${st.SURVEY_OPEN === "1" ? "checked" : ""}><span></span></span><span><b>เปิดให้ผู้เข้าร่วมตอบ</b><div class="xs faint">เปิดเมื่อสิ้นสุดการใช้ระบบ (เดือนที่ 6) · ปิดได้ทุกเมื่อ</div></span></label>
-      <div class="row mt-12" style="justify-content:flex-end">${u ? `<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">${ic("external-link")} เปิดดู</a>` : ""}<button class="btn sm primary" onclick="App.saveGform()">บันทึก</button></div></div>`;
+      <div class="row mt-12" style="justify-content:flex-end">${u ? `<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">${ic("external-link")} เปิดดู</a>` : ""}<button class="btn sm primary" onclick="App.saveGform()">บันทึก</button></div>
+      <h3 class="mt-16" style="border-top:1px solid var(--border);padding-top:16px">นำเข้าคำตอบจาก Google Sheet</h3>
+      <div class="muted small mt-4">เปิด Google Sheet ที่รับคำตอบ → <b>ไฟล์ → ดาวน์โหลด → ค่าที่คั่นด้วยจุลภาค (.csv)</b> แล้วเลือกไฟล์ที่นี่ · ระบบคำนวณคะแนนรายมิติ/ภาพรวมให้ในแท็บนี้ · นำเข้าซ้ำได้ (รหัสผู้ตอบเดิมจะถูกแทนที่ด้วยคำตอบล่าสุด)</div>
+      <input type="file" id="gfCsv" accept=".csv,text/csv" style="display:none" onchange="App.importSurveyCsv(this)">
+      <div class="row mt-12" style="justify-content:flex-end"><button class="btn sm" onclick="document.getElementById('gfCsv').click()">${ic("package-import")} นำเข้า CSV จาก Google Sheet</button></div></div>`;
   }
+
+  // ---- CSV (RFC 4180: เครื่องหมายคำพูด / ขึ้นบรรทัดในช่อง) ----
+  function parseCsv(t) {
+    t = t.replace(/^\uFEFF/, "");
+    const rows = []; let row = [], f = "", q = false;
+    for (let i = 0; i < t.length; i++) {
+      const ch = t[i];
+      if (q) { if (ch === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ",") { row.push(f); f = ""; }
+      else if (ch === "\n" || ch === "\r") { if (ch === "\r" && t[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; }
+      else f += ch;
+    }
+    if (f !== "" || row.length) { row.push(f); rows.push(row); }
+    return rows.filter((r) => r.some((c) => c.trim() !== ""));
+  }
+  const nz = (x) => String(x || "").normalize("NFC").replace(/\s+/g, " ").trim();
+  function parseTs(v) {
+    v = nz(v); if (!v) return "";
+    const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (m) { let y = +m[3]; if (y > 2400) y -= 543; const d = new Date(y, +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)); return isNaN(+d) ? "" : d.toISOString(); }
+    const d = new Date(v); return isNaN(+d) ? "" : d.toISOString();
+  }
+  // แปลงหัวคอลัมน์ Google Form → ช่องข้อมูล (ตามสคริปต์ createSebSurveyForm)
+  function mapSurveyCsv(rows) {
+    const F = App.SURVEY_FORM, H = rows[0].map(nz), cols = [];
+    const p1 = new Map(F.PART1.map(([k, t, o]) => [nz(t), { k, o: o.map(nz) }]));
+    const p4 = new Map(F.PART4.map((t, i) => [nz(`${i + 1}. ${t}`), i + 1]));
+    const p2 = new Set(F.PART2.map((d) => nz(d[0])));
+    const cmp = new Map(F.CMP.map(([v, t]) => [nz(t), v]));
+    H.forEach((h, i) => {
+      if (i === 0 || /^(ประทับเวลา|timestamp)$/i.test(h)) { if (i === 0) cols.push([i, "ts"]); return; }
+      if (/รหัสผู้ตอบ/.test(h)) return cols.push([i, "code"]);
+      if (p1.has(h)) return cols.push([i, "p1", p1.get(h)]);
+      if (p4.has(h)) return cols.push([i, "o", p4.get(h)]);
+      const g = h.match(/^(.*?)\s*\[\s*(\d+)\.\s.*\]$/);
+      if (g && p2.has(nz(g[1]))) return cols.push([i, "q", +g[2]]);
+      if (g && /^หัวข้อเปรียบเทียบ$/.test(nz(g[1]))) return cols.push([i, "c", +g[2]]);
+    });
+    const has = (t) => cols.some((c) => c[1] === t);
+    if (!has("code")) throw new Error('ไม่พบคอลัมน์ "รหัสผู้ตอบ" — ไฟล์นี้อาจไม่ใช่ชีตคำตอบของแบบสอบถาม SEB');
+    const nq = cols.filter((c) => c[1] === "q").length;
+    if (nq < 22) throw new Error(`พบข้อ Likert เพียง ${nq}/22 ข้อ — ตรวจว่าหัวคอลัมน์ใน Sheet ไม่ถูกแก้ไข`);
+    const out = rows.slice(1).map((r) => {
+      const o = { respondentCode: "", submittedAt: "", likert: {}, comparisons: {}, openAnswers: {} };
+      cols.forEach(([i, t, x]) => {
+        const v = nz(r[i]);
+        if (t === "ts") o.submittedAt = parseTs(v);
+        else if (t === "code") o.respondentCode = v.toUpperCase();
+        else if (t === "p1") { if (!v) return; if (x.k === "profession" && !x.o.includes(v)) { o.profession = x.o.find((z) => /^อื่น/.test(z)) || "อื่น ๆ"; o.professionOther = v.replace(/^อื่น ?ๆ?:?\s*/, ""); } else o[x.k] = v; }
+        else if (t === "q") { const n = parseInt(v, 10); if (n >= 1 && n <= 5) o.likert[`q${x}`] = n; }
+        else if (t === "c") { const n = cmp.get(v); if (n) o.comparisons[`c${x}`] = n; }
+        else if (t === "o") o.openAnswers[`o${x}`] = String(r[i] || "").trim();
+      });
+      return o;
+    });
+    return out;
+  }
+  App.importSurveyCsv = async (inp) => {
+    const file = inp.files?.[0]; inp.value = "";
+    if (!file) return;
+    let rows;
+    try {
+      const all = parseCsv(await file.text());
+      if (all.length < 2) throw new Error("ไฟล์ไม่มีคำตอบ");
+      rows = mapSurveyCsv(all);
+    } catch (e) { return toast(e.message, true); }
+    const ok = rows.filter((r) => r.respondentCode), noCode = rows.length - ok.length;
+    const cnt = {}; ok.forEach((r) => (cnt[r.respondentCode] = (cnt[r.respondentCode] || 0) + 1));
+    const dup = Object.keys(cnt).filter((k) => cnt[k] > 1);
+    if (dup.length) return dialog({ title: "พบรหัสผู้ตอบซ้ำในไฟล์", body: `<div class="small">รหัส <b class="mono">${esc(dup.join(", "))}</b> ตอบมากกว่า 1 ครั้ง · ลบแถวที่ไม่ใช้ใน Google Sheet แล้วดาวน์โหลด CSV ใหม่</div>`, confirm: "ตกลง", cancel: false });
+    const old = new Set((S.research?.survey || []).map((x) => x.respondentCode));
+    const rep = ok.filter((r) => old.has(r.respondentCode)).length;
+    const inc = ok.filter((r) => Object.keys(r.likert).length < 22).length;
+    const body = `<div class="small"><div>พบคำตอบ <b>${ok.length}</b> ราย${noCode ? ` · ข้าม ${noCode} แถวที่ไม่มีรหัสผู้ตอบ` : ""}</div>
+      ${rep ? `<div class="mt-4">รหัสที่มีในระบบแล้ว <b>${rep}</b> ราย จะถูกแทนที่ด้วยคำตอบในไฟล์</div>` : ""}
+      ${inc ? `<div class="mt-4 danger-text">ตอบ Likert ไม่ครบ 22 ข้อ ${inc} ราย — คิดค่าเฉลี่ยจากข้อที่ตอบ</div>` : ""}
+      <div class="xs faint mt-8">ไม่มีการเก็บอีเมลหรือชื่อผู้ตอบ · ใช้รหัสผู้ตอบเท่านั้น</div></div>`;
+    if (!ok.length) return toast("ไม่มีแถวที่มีรหัสผู้ตอบ", true);
+    if (!(await dialog({ title: "นำเข้าคำตอบแบบสอบถาม", body, confirm: `นำเข้า ${ok.length} ราย` }))) return;
+    try { const r = await api("apiImportSurvey", S.token, { rows: ok }); toast(`นำเข้าแล้ว ${r.imported} ราย${r.replaced ? ` (แทนที่ ${r.replaced})` : ""}`); S.research = null; App.render(); } catch (e) { fail(e); }
+  };
   App.saveGform = async () => {
     const u = $("#gfUrl").value.trim();
     if (u && !/^https:\/\/(docs\.google\.com\/forms\/|forms\.gle\/)/.test(u)) return toast("ต้องเป็นลิงก์ Google Form (docs.google.com/forms หรือ forms.gle)", true);
