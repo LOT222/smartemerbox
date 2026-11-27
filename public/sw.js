@@ -1,8 +1,8 @@
 /* SEB v2 service worker — app shell cache + Web Push */
-const VERSION = "seb-v2.22.3-1";
+const VERSION = "seb-v2.23.0-1";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./config.js", "./manifest.webmanifest",
-  "./vendor/qrcode.js", "./vendor/fonts.css", "./vendor/icons.css", "./js/consent-text.js", "./js/core.js", "./js/consent.js", "./js/app.js", "./js/pages.js", "./js/print.js", "./js/stats.js", "./js/research.js", "./js/public.js", "./js/inbox.js",
+  "./vendor/qrcode.js", "./vendor/fonts.css", "./vendor/icons.css", "./js/consent-text.js", "./js/core.js", "./js/consent.js", "./js/docs.js", "./js/app.js", "./js/pages.js", "./js/print.js", "./js/stats.js", "./js/research.js", "./js/public.js", "./js/inbox.js",
   "./icons/icon-192.png", "./icons/hospital-logo-96.png", "./icons/seb-logo-256.png", "./icons/hospital-logo-256.png", "./icons/icon-512.png", "./icons/badge-72.png",
 ];
 

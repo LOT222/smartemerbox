@@ -186,36 +186,31 @@
   };
 
   // ---------------- พิมพ์สำเนาแบบยินยอม (2 ฉบับ) ----------------
-  function consentDoc(r, copies) {
+  // หน้าเอกสารยินยอม (ใช้ทั้งฉบับที่ลงนามแล้วและแบบเปล่า) · ส่งออก PDF/Word ผ่าน App.docPreview (docs.js)
+  const blank = (v, w = 28) => (v ? `<u>${esc(v)}</u>` : ".".repeat(w));
+  function consentPages(r, copies) {
     const items = T().CONSENT_ITEMS;
-    const page = (n) => `<section class="pg"><div class="cp">ฉบับที่ ${n}${n === 1 ? " (อาสาสมัคร)" : " (ผู้วิจัย)"}</div>
+    const page = (n) => `<section class="pg">${copies > 1 ? `<div class="cp">ฉบับที่ ${n}${n === 1 ? " (อาสาสมัคร)" : " (ผู้วิจัย)"}</div>` : ""}
       <h1>เอกสารแสดงความยินยอมโดยได้รับการบอกกล่าว</h1>
-      <p>ข้าพเจ้า <u>${esc(r.fullName || "")}</u> อายุ <u>${esc(r.age || "-")}</u> ปี ตำแหน่ง <u>${esc(r.position || "-")}</u> หน่วยงาน <u>${esc(r.unit || "-")}</u> โรงพยาบาลลานสัก</p>
+      <p>ข้าพเจ้า ${blank(r.fullName, 40)} อายุ ${blank(r.age, 6)} ปี ตำแหน่ง ${blank(r.position, 24)} หน่วยงาน ${blank(r.unit, 24)} โรงพยาบาลลานสัก</p>
       ${md(T().CONSENT_INTRO)}
       <p><b>ข้าพเจ้าเข้าใจ และยินยอมในประเด็นต่อไปนี้</b></p>
       <ol>${items.map((t, i) => `<li>${(r.agreedItems || [])[i] ? "☑" : "☐"} ${esc(t)}</li>`).join("")}</ol>
       ${md(T().CONSENT_CLOSE)}
-      <div class="sigs"><div><img src="${r.signatureData || ""}" alt=""><div>ลงนาม อาสาสมัครวิจัย</div><div>(${esc(r.fullName || "")})</div><div>วันที่ ${thDate(r.signedAt)}</div></div>
-        <div><div class="line"></div><div>ลงนาม ผู้ชี้แจงข้อมูล</div><div>(นายนที อิ่มใจจิตร์)</div><div>วันที่ ........................................</div></div>
-        <div><div class="line">${r.receivedBy ? esc(r.receivedBy) : ""}</div><div>ผู้รับเอกสารยินยอมที่ได้รับมอบหมาย</div><div>วันที่ ${r.receivedAt ? thDate(r.receivedAt) : "........................................"}</div></div></div>
-      <div class="meta">ลงนามอิเล็กทรอนิกส์ผ่านระบบ SEB · รหัสเอกสาร ${esc(String(r.id || "").slice(0, 8))} · เปิดอ่านเอกสารชี้แจงครั้งแรก ${fmtDT(r.pisFirstViewedAt)} · ลงนาม ${fmtDT(r.signedAt)} · ${esc(r.docVersion || "")}</div></section>`;
-    const css = `*{box-sizing:border-box}body{font-family:"IBM Plex Sans Thai",sans-serif;font-size:11pt;color:#111;margin:0}@page{size:A4;margin:16mm}
-      .pg{page-break-after:always}.pg:last-child{page-break-after:auto}.cp{text-align:right;font-size:9pt;color:#666}
-      h1{font-size:14pt;text-align:center;margin:4mm 0 5mm}p,li{line-height:1.6;margin:0 0 2mm}ol{padding-left:0;list-style:none}h3{font-size:11pt;margin:3mm 0 1mm}ul{margin:0 0 2mm 5mm;padding:0}
-      .sigs{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm;margin-top:8mm;text-align:center;font-size:10pt}.sigs img{height:18mm;max-width:100%;object-fit:contain;border-bottom:0.3mm solid #333;display:block;margin:0 auto 1mm}
-      .line{height:18mm;border-bottom:0.3mm solid #333;margin-bottom:1mm;display:flex;align-items:flex-end;justify-content:center}.meta{margin-top:8mm;font-size:8pt;color:#777;border-top:0.2mm solid #ccc;padding-top:2mm}`;
-    const href = new URL("./vendor/fonts.css", location.href).href;
-    return `<!doctype html><html lang="th"><head><meta charset="utf-8"><link rel="stylesheet" href="${href}"><style>${css}</style></head><body>${Array.from({ length: copies }, (_, i) => page(i + 1)).join("")}</body></html>`;
+      <table class="sigs"><tr>
+        <td>${r.signatureData ? `<img src="${r.signatureData}" alt="ลายมือชื่อ" height="64">` : `<div class="line"></div>`}<div>ลงนาม อาสาสมัครวิจัย</div><div>(${r.fullName ? esc(r.fullName) : ".".repeat(30)})</div><div>วันที่ ${r.signedAt ? thDate(r.signedAt) : ".".repeat(30)}</div></td>
+        <td><div class="line"></div><div>ลงนาม ผู้ชี้แจงข้อมูล</div><div>(นายนที อิ่มใจจิตร์)</div><div>วันที่ ${".".repeat(30)}</div></td>
+        <td><div class="line">${r.receivedBy ? esc(r.receivedBy) : ""}</div><div>ผู้รับเอกสารยินยอมที่ได้รับมอบหมาย</div><div>วันที่ ${r.receivedAt ? thDate(r.receivedAt) : ".".repeat(30)}</div></td>
+      </tr></table>
+      ${r.id ? `<div class="meta">ลงนามอิเล็กทรอนิกส์ผ่านระบบ SEB · รหัสเอกสาร ${esc(String(r.id).slice(0, 8))} · เปิดอ่านเอกสารชี้แจงครั้งแรก ${fmtDT(r.pisFirstViewedAt)} · ลงนาม ${fmtDT(r.signedAt)} · ${esc(r.docVersion || "")}</div>` : ""}</section>`;
+    return Array.from({ length: copies }, (_, i) => page(i + 1)).join("");
   }
-  function printDoc(html) {
-    drawer("พิมพ์แบบยินยอม", `<div class="print-preview" style="min-height:70vh"><iframe id="csFrame" style="width:794px;height:1123px"></iframe></div>`,
-      `<button class="btn ghost" onclick="App.closeDrawer()">ปิด</button><button class="btn primary" onclick="try{SEB.$('#csFrame').contentWindow.print()}catch(e){SEB.toast('พิมพ์จากหน้านี้ไม่ได้',true)}">${ic("printer")} พิมพ์</button>`, { wide: true });
-    const fr = $("#csFrame");
-    fr.srcdoc = html;
-    fr.onload = () => { try { fr.style.height = fr.contentDocument.documentElement.scrollHeight + "px"; } catch (_) {} const sc = Math.min(1, ($(".print-preview").clientWidth - 32) / 794); fr.style.transform = `scale(${sc})`; fr.style.transformOrigin = "top center"; };
-  }
+  App.consentPagesHtml = consentPages;
   App.printMyConsent = () => App.printConsent("mine", 1);
-  App.printConsent = async (id, copies = 2) => { try { const r = await api("apiGetConsent", S.token, id); printDoc(consentDoc(r.record, copies)); } catch (e) { fail(e); } };
+  App.printConsent = async (id, copies = 2) => {
+    try { const r = await api("apiGetConsent", S.token, id); App.docPreview({ title: "เอกสารแสดงความยินยอม", file: `SEB_เอกสารยินยอม_${(r.record.fullName || "").replace(/\s+/g, "_")}`, body: consentPages(r.record, copies), note: "ลายมือชื่ออิเล็กทรอนิกส์แสดงในไฟล์ PDF · ไฟล์ Word บางโปรแกรมไม่แสดงภาพลายมือชื่อ" }); } catch (e) { fail(e); }
+  };
+  App.blankConsent = () => App.docPreview({ title: "เอกสารแสดงความยินยอม (แบบเปล่า)", file: "SEB_เอกสารยินยอม_แบบเปล่า", body: consentPages({}, 2) });
 
   // =================================================================
   // ผู้ดูแล / เจ้าหน้าที่รับเอกสาร: รายการความยินยอม
@@ -228,12 +223,13 @@
     const n = (s) => rows.filter((u) => u.consent?.status === s).length;
     const paper = rows.filter((u) => u.researchConsent && u.consent?.status !== "signed").length;
     return `<div class="grid grid-4 mb-16">${X.kpi("ยินยอม (อิเล็กทรอนิกส์)", n("signed"), "signature", "ok")}${X.kpi("ยินยอม (กระดาษ)", paper, "file-text", "accent", "ติ๊กในหน้าผู้ใช้งาน")}${X.kpi("กำลังพิจารณา", n("viewed"), "hourglass", "warn")}${X.kpi("ไม่เข้าร่วม / ถอนตัว", n("declined") + n("withdrawn"), "user-x", "violet")}</div>
+      <div class="row mb-12" style="justify-content:flex-end"><button class="btn sm" onclick="App.blankConsent()">${ic("file-text")} แบบยินยอมเปล่า (PDF / Word)</button></div>
       <div class="card"><div class="table-wrap"><table class="t responsive"><thead><tr><th>ผู้ใช้</th><th>รหัส</th><th>PDPA</th><th>สถานะความยินยอม</th><th>เปิดอ่าน</th><th>ลงนาม</th><th>รับเอกสาร</th><th></th></tr></thead><tbody>
       ${rows.map((u) => { const c = u.consent; const [t, cl] = c ? STATUS[c.status] : [u.researchConsent ? "ยินยอม (กระดาษ)" : "ยังไม่ตอบ", u.researchConsent ? "ok" : ""];
         return `<tr><td data-l="ผู้ใช้"><b>${esc(u.displayName)}</b><div class="xs faint">${esc(u.position)}</div></td><td data-l="รหัส" class="mono">${esc(u.staffCode || "-")}</td><td data-l="PDPA">${u.pdpaAcceptedAt ? `<span class="pill ok plain">${fmtD(u.pdpaAcceptedAt)}</span>` : `<span class="faint small">ยังไม่รับทราบ</span>`}</td>
           <td data-l="สถานะ"><span class="pill ${cl}">${t}</span></td><td data-l="เปิดอ่าน" class="tabnum">${c?.pisFirstViewedAt ? fmtD(c.pisFirstViewedAt) : "-"}</td><td data-l="ลงนาม" class="tabnum">${c?.signedAt ? fmtDT(c.signedAt) : "-"}</td>
           <td data-l="รับเอกสาร">${c?.receivedAt ? `<span class="xs">${esc(c.receivedBy)}<br>${fmtD(c.receivedAt)}</span>` : c?.status === "signed" && S.user.consentOfficer ? `<button class="btn sm" onclick="App.receiveConsent('${c.id}')">ยืนยันรับ</button>` : "-"}</td>
-          <td class="right">${c?.status === "signed" ? `<button class="btn sm" onclick="App.printConsent('${c.id}')">${ic("printer")} พิมพ์ 2 ฉบับ</button>` : ""}</td></tr>`; }).join("")}</tbody></table></div></div>
+          <td class="right">${c?.status === "signed" ? `<button class="btn sm" onclick="App.printConsent('${c.id}')">${ic("download")} PDF / Word</button>` : ""}</td></tr>`; }).join("")}</tbody></table></div></div>
       <div class="xs faint mt-12">${ic("lock")} ดูลายมือชื่อได้เฉพาะผู้ดูแลระบบและเจ้าหน้าที่รับเอกสารยินยอมที่ได้รับมอบหมาย ทุกครั้งที่เปิดดูถูกบันทึกใน audit log</div>`;
   };
   App.receiveConsent = async (id) => { try { await api("apiConsentReceive", S.token, id); toast("บันทึกการรับเอกสารแล้ว"); App.render(); } catch (e) { fail(e); } };

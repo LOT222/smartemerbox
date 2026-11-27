@@ -349,14 +349,15 @@
 
   // ---------------- observation (ภาคผนวก ก ส่วนที่ 3) ----------------
   const OBS = ["ขั้นตอนการสแกน QR Code", "เวลาที่ใช้ในการบันทึกข้อมูล", "ความถูกต้องของข้อมูลที่กรอก", "การตอบสนองต่อการแจ้งเตือน", "ปัญหาที่พบระหว่างใช้งาน", "พฤติกรรมการใช้งานระบบ"];
+  App.OBS_ITEMS = OBS;
   function tabObs() {
     const R = S.research;
-    $("#resBody").innerHTML = `<div class="split"><div class="card card-pad"><h3>บันทึกการสังเกตภาคสนาม</h3><div class="xs faint mt-4">สำหรับผู้วิจัยเท่านั้น · ใช้รหัสแทนชื่อผู้ถูกสังเกต · ไม่รบกวนการให้บริการผู้ป่วย</div>
+    $("#resBody").innerHTML = `<div class="split"><div class="card card-pad"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>บันทึกการสังเกตภาคสนาม</h3><button class="btn sm" onclick="App.docObs('blank')">${ic("file-text")} แบบเปล่า (PDF / Word)</button></div><div class="xs faint mt-4">สำหรับผู้วิจัยเท่านั้น · ใช้รหัสแทนชื่อผู้ถูกสังเกต · ไม่รบกวนการให้บริการผู้ป่วย</div>
       <div class="form-grid mt-16">${field("วันเวลาที่สังเกต", X.dtSel('id="obT"', localInput()))}${field("สถานที่", `<select class="input" id="obP">${opt([["", "เลือก"], ...R.locations.map((l) => [l.name, l.name])], "")}</select>`)}${field("ผู้ถูกสังเกต (รหัส)", `<input class="input mono" id="obC" placeholder="เช่น N03">`)}</div>
       ${OBS.map((o, i) => `<div class="q"><div class="q-title">${o}</div><div class="row wrap mt-8"><div class="seg" data-ob="${i}">${["ดี", "ปานกลาง", "ควรปรับปรุง"].map((l) => `<button type="button" onclick="SEB.$$('[data-ob=\\'${i}\\'] button').forEach(b=>b.classList.toggle('on',b===this))">${l}</button>`).join("")}</div><input class="input sm grow" data-obd="${i}" placeholder="รายละเอียดที่พบ"></div></div>`).join("")}
       ${field("บันทึกเพิ่มเติม", `<textarea class="input" id="obN"></textarea>`)}
       <div class="row mt-16" style="justify-content:flex-end"><button class="btn primary" onclick="App.saveObs()">บันทึก</button></div></div>
-      <div class="card"><div class="card-head"><h3 class="grow">บันทึกที่ผ่านมา</h3><span class="xs faint">${R.observations.length}</span></div>${R.observations.length ? R.observations.slice().reverse().map((o) => `<div class="list-row"><div class="grow"><b>${fmtDT(o.observedAt)}</b> · ${esc(o.place || "")} · <span class="mono">${esc(o.observedCode || "")}</span><div class="xs faint">${Object.values(o.items || {}).map((x) => x.level).filter(Boolean).join(" · ")}</div></div></div>`).join("") : empty("ยังไม่มีบันทึก", "eye-off")}</div></div>`;
+      <div class="card"><div class="card-head"><h3 class="grow">บันทึกที่ผ่านมา</h3><span class="xs faint">${R.observations.length}</span>${R.observations.length ? `<button class="btn sm" onclick="App.docObs('all')">${ic("download")} ทั้งหมด</button>` : ""}</div>${R.observations.length ? R.observations.slice().reverse().map((o) => `<div class="list-row"><div class="grow"><b>${fmtDT(o.observedAt)}</b> · ${esc(o.place || "")} · <span class="mono">${esc(o.observedCode || "")}</span><div class="xs faint">${Object.values(o.items || {}).map((x) => x.level).filter(Boolean).join(" · ")}</div></div><button class="btn sm ghost" title="PDF / Word" onclick="App.docObs('${o.id}')">${ic("download")}</button></div>`).join("") : empty("ยังไม่มีบันทึก", "eye-off")}</div></div>`;
   }
   App.saveObs = async () => {
     try {
@@ -382,10 +383,10 @@
           ${dims.map(([k, l, n]) => { const a = sv.map((x) => +x[k]).filter((x) => !isNaN(x)); const d = St.describe(a); const m = St.mean(a); return `<tr><td><b>${l}</b> <span class="xs faint">${n}</span></td><td class="tabnum">${a.length ? `${r1(m)} ± ${r1(St.sd(a))}` : "–"}</td><td class="tabnum">${a.length ? `${r1(d.med)} (${r1(d.q1)}–${r1(d.q3)})` : "–"}</td><td>${a.length ? `<span class="pill ${m >= 3.51 ? "ok" : "warn"}">${level(m)}</span>` : ""}</td></tr>`; }).join("")}</tbody></table></div></div>
         <div class="card"><div class="card-head"><h3 class="grow">เปรียบเทียบก่อน–หลัง (ตอนที่ 3)</h3><span class="xs faint">ร้อยละที่ตอบ "ดีขึ้น"</span></div><div class="card-body">${sv.length ? hbars(CMP.map((c, i) => [c, (sv.filter((x) => +x.comparisons?.[`c${i + 1}`] >= 4).length / sv.length) * 100, ""]), "%") : empty("ยังไม่มีข้อมูล", "chart-bar-off")}</div></div>
       </div>
-      <div class="card card-pad center"><h3>ลิงก์แบบสอบถาม</h3><div class="muted small mt-4">ให้ผู้เข้าร่วมวิจัยตอบ 1 ครั้งเมื่อสิ้นสุดการใช้ระบบ (เดือนที่ 6)</div>
+      <div class="col gap-16"><div class="card card-pad center"><h3>ลิงก์แบบสอบถาม</h3><div class="muted small mt-4">ให้ผู้เข้าร่วมวิจัยตอบ 1 ครั้งเมื่อสิ้นสุดการใช้ระบบ (เดือนที่ 6)</div>
         <div style="width:180px;margin:16px auto">${App.qrSvgFor(url, 4)}</div><div class="mono xs" style="word-break:break-all">${esc(url)}</div>
         <div class="row mt-12" style="justify-content:center"><button class="btn sm" onclick="navigator.clipboard.writeText('${esc(url)}').then(()=>SEB.toast('คัดลอกแล้ว'))">${ic("copy")} คัดลอกลิงก์</button><a class="btn sm" href="${esc(url)}" target="_blank">${ic("external-link")} เปิด</a></div>
-        <div class="xs faint mt-16" style="text-align:left">แบบสอบถามตรงตามฉบับที่ EC รับรอง: ข้อมูลทั่วไป 6 ข้อ · Likert 22 ข้อ 5 มิติ · เปรียบเทียบ 6 ข้อ · ปลายเปิด 5 ข้อ · ผู้ตอบใช้รหัสที่ผู้วิจัยแจก ไม่ผูกกับบัญชีผู้ใช้</div></div></div>`;
+        <div class="xs faint mt-16" style="text-align:left">แบบสอบถามตรงตามฉบับที่ EC รับรอง: ข้อมูลทั่วไป 6 ข้อ · Likert 22 ข้อ 5 มิติ · เปรียบเทียบ 6 ข้อ · ปลายเปิด 5 ข้อ · ผู้ตอบใช้รหัสที่ผู้วิจัยแจก ไม่ผูกกับบัญชีผู้ใช้</div></div>${App.surveyDocsCard()}</div></div>`;
   }
 
   // ---------------- export ----------------
