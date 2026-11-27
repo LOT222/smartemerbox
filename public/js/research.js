@@ -48,6 +48,24 @@
       const hi = x === n ? 1 : bis((p) => St.binomCdf(x, n, p) <= 0.025);
       return { p: x / n, lo, hi };
     },
+    wilson(x, n) { if (!n) return null; const z = 1.959964, p = x / n, d = 1 + z * z / n, c = (p + z * z / (2 * n)) / d, h = (z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / d; return { lo: Math.max(0, c - h), hi: Math.min(1, c + h) }; },
+    // ผลต่างสัดส่วน (หลัง − ก่อน) · 95% CI แบบ Newcombe (hybrid Wilson score)
+    newcombe(x1, n1, x2, n2) {
+      if (!n1 || !n2) return null;
+      const p1 = x1 / n1, p2 = x2 / n2, w1 = St.wilson(x1, n1), w2 = St.wilson(x2, n2), d = p2 - p1;
+      return { est: d, lo: d - Math.sqrt((p2 - w2.lo) ** 2 + (w1.hi - p1) ** 2), hi: d + Math.sqrt((w2.hi - p2) ** 2 + (p1 - w1.lo) ** 2) };
+    },
+    // 2×2: Chi-square (Pearson) เมื่อค่าคาดหวังทุกช่อง ≥ 5 ไม่เช่นนั้น Fisher's exact (ตามข้อ 5.9.6)
+    test2x2(a, b, c, d) {
+      const n = a + b + c + d; if (!n || !(a + b) || !(c + d)) return null;
+      const E = [[a + b, a + c], [a + b, b + d], [c + d, a + c], [c + d, b + d]].map(([r, k]) => (r * k) / n);
+      if (Math.min(...E) >= 5) {
+        const O = [a, b, c, d], chi = O.reduce((s, o, i) => s + (o - E[i]) ** 2 / E[i], 0);
+        return { p: 2 * St.normCdf(-Math.sqrt(chi)), test: "chi", stat: chi };
+      }
+      if (!(a + c) || !(b + d)) return { p: 1, test: "fisher" };
+      return { p: St.fisher(a, b, c, d), test: "fisher" };
+    },
     fisher(a, b, c, d) {
       const n = a + b + c + d, r1 = a + b, c1 = a + c;
       if (!n) return null;
@@ -113,9 +131,68 @@
     const units = {};
     respPostAll.filter((e) => e.notificationStatus === "sent").forEach((e) => { const m = minutes(e.notificationSentAt, e.acknowledgedAt); if (outl(m)) (units[e.locationName || "ไม่ระบุ"] = units[e.locationName || "ไม่ระบุ"] || []).push(m); });
     const outliers = [...respBase, ...respPost].filter((x) => x !== null && x > 1440).length;
-    return { rb, rp, failed, legacy, rdBase, rdPost, rdEst, recBase, recPost, expBase, expPost, rdyBase, rdyPost, timings, units, outliers, ev, ins, nPost: respPostAll.length };
+    const nPaper = ev.filter((e) => e.source === "paper").length;
+    const isPostT = (t) => t.period === "post" || (!t.period && t.source === "app");
+    const tmBase = timings.filter((t) => isBase(t.period) || (!t.period && t.source === "paper"));
+    const tmPost = timings.filter(isPostT);
+    return { rb, rp, failed, legacy, rdBase, rdPost, rdEst, recBase, recPost, expBase, expPost, rdyBase, rdyPost, timings, tmBase, tmPost, units, outliers, ev, ins, nPost: respPostAll.length, nPaper, nRdPost: rdPostEv.length };
   }
   const sum = (a) => a.reduce((x, y) => x + (Number(y) || 0), 0);
+
+  // ---------------- ตารางเปรียบเทียบก่อน–หลัง (ภาคผนวก ก 1.3 · วิเคราะห์ตามข้อ 5.9.6 ตารางที่ 2) ----------------
+  // ผลต่าง = หลัง − ก่อน · เวลา: ผลต่างมัธยฐาน (bootstrap 95% CI) + Mann–Whitney U (เชิงสำรวจ)
+  // ร้อยละ/อัตรา: exact 95% CI รายช่วง · ผลต่างเป็นจุดร้อยละ (Newcombe 95% CI) · Chi-square หรือ Fisher ตามค่าคาดหวัง
+  function indModel(C, s) {
+    const f1 = (x) => r1(x), pp = (x) => r1(x * 100);
+    const tm = (a) => { const d = St.describe(a); return d.n ? { main: `${f1(d.med)} (${f1(d.q1)}–${f1(d.q3)})`, sub: `n = ${d.n}`, d } : null; };
+    const prop = (x, n) => { const c = St.exactCI(x, n); return c ? { main: `${pp(c.p)} (${x}/${n})`, sub: `95% CI ${pp(c.lo)}–${pp(c.hi)}`, c } : null; };
+    const rate = (x, n) => { const c = St.exactCI(x, n); return c ? { main: `${pp(c.p)} (${x}/${n})`, sub: `95% CI ${pp(c.lo)}–${pp(c.hi)}`, c } : null; };
+    const tDiff = (a, b) => { const bd = St.bootDiff(a, b), mw = St.mannWhitney(a, b); return { diff: bd ? { main: f1(bd.est), sub: `${f1(bd.lo)} ถึง ${f1(bd.hi)}` } : null, p: mw ? { v: mw.p, sup: "a" } : null }; };
+    const pDiff = (x1, n1, x2, n2) => { const nc = St.newcombe(x1, n1, x2, n2), t = St.test2x2(x1, n1 - x1, x2, n2 - x2); return { diff: nc ? { main: pp(nc.est), sub: `${pp(nc.lo)} ถึง ${pp(nc.hi)}` } : null, p: t ? { v: t.p, sup: t.test === "chi" ? "b" : "c" } : null }; };
+    const T = (a) => a.map((t) => +t.minutes);
+    const tmR = (a) => { const d = St.describe(T(a)); return d.n ? { main: `${f1(d.med)} (${f1(d.min)}–${f1(d.max)})`, sub: `IQR ${f1(d.q1)}–${f1(d.q3)} · ${d.n} ฉบับ`, d } : null; };
+    const target = Number(s.RESPONSE_TARGET_MIN || 5);
+    const rows = [
+      { k: 1, name: "ระยะเวลารับทราบการเปิดกล่อง (นาที)", stat: "Median (IQR)", def: "ก่อน: รับทราบ − หน่วยงานแจ้ง · หลัง: acknowledged_at − notification_sent_at", b: tm(C.rb), a: tm(C.rp), ...tDiff(C.rb, C.rp), target: `≤ ${target} นาที`, ok: C.rp.length ? St.describe(C.rp).med <= target : null },
+      { k: 2, name: "ระยะเวลาจนกล่องพร้อมใช้ (นาที)", stat: "Median (IQR)", def: "ready_at − actual_opened_at", b: tm(C.rdBase), a: tm(C.rdPost), ...tDiff(C.rdBase, C.rdPost), target: "ลดลงจาก baseline", ok: null },
+      { k: 3, name: "ความครบถ้วนของการบันทึก", stat: "ร้อยละ (n/N)", def: "แบบบันทึกที่ครบทุกฟิลด์ที่จำเป็น / ทั้งหมด", b: prop(C.recBase.ok, C.recBase.tot), a: prop(C.recPost.ok, C.recPost.tot), ...pDiff(C.recBase.ok, C.recBase.tot, C.recPost.ok, C.recPost.tot), target: "≥ 95%", ok: C.recPost.tot ? C.recPost.ok / C.recPost.tot >= 0.95 : null },
+      { k: 4, name: "รายการยาหมดอายุต่อ 100 รายการที่ตรวจ", stat: "อัตรา (n/N)", def: "รายการหมดอายุ / รายการที่ตรวจ × 100 · 95% CI แบบ exact", b: rate(C.expBase.x, C.expBase.n), a: rate(C.expPost.x, C.expPost.n), ...pDiff(C.expBase.x, C.expBase.n, C.expPost.x, C.expPost.n), target: "0", ok: C.expPost.n ? C.expPost.x === 0 : null },
+      { k: 5, name: "การตรวจที่กล่องพร้อมใช้", stat: "ร้อยละ (n/N)", def: "ยาครบทุกรายการตามชุดมาตรฐาน และไม่มีรายการหมดอายุ", b: prop(C.rdyBase.x, C.rdyBase.n), a: prop(C.rdyPost.x, C.rdyPost.n), ...pDiff(C.rdyBase.x, C.rdyBase.n, C.rdyPost.x, C.rdyPost.n), target: "≥ 95%", ok: C.rdyPost.n ? C.rdyPost.x / C.rdyPost.n >= 0.95 : null },
+      { k: 6, name: "เวลาจัดทำรายงานประจำเดือน (นาที)", stat: "Median (min–max)", def: "เชิงพรรณนา ไม่ทดสอบสมมติฐาน (จำนวนรายงานน้อย)", b: tmR(C.tmBase), a: tmR(C.tmPost), diff: null, p: { v: null, sup: "d" }, desc: true, target: "≤ 30 นาที", ok: C.tmPost.length ? St.describe(T(C.tmPost)).med <= 30 : null },
+    ];
+    // ข้อมูลสูญหาย/คัดออก (ข้อ 5.9.6 ข้อ 3: รายงานจำนวนและร้อยละ · ไม่แทนค่า)
+    const pc = (x, n) => (n ? `${x}/${n} (ร้อยละ ${r1((x / n) * 100)})` : "0");
+    const sentNotAnalysed = C.nPost - C.failed - C.legacy - C.rp.length;
+    const miss = {
+      failed: C.failed, nPost: C.nPost,
+      lines: [
+        `Response time ก่อนใช้ระบบ: ไม่มีเวลาครบ ${pc(C.nPaper - C.rb.length, C.nPaper)}`,
+        `Response time หลังใช้ระบบ: ส่งแจ้งเตือนไม่สำเร็จ ${pc(C.failed, C.nPost)} · ไม่มีเวลาส่ง (ระบบรุ่นแรก) ${pc(C.legacy, C.nPost)} · ยังไม่รับทราบ/ผิดปกติ ${pc(Math.max(0, sentNotAnalysed), C.nPost)}`,
+        `Box readiness ก่อน: ${pc(C.nPaper - C.rdBase.length, C.nPaper)} · หลัง: ${pc(C.nRdPost - C.rdPost.length, C.nRdPost)}${C.rdEst ? ` (รวมเวลาพร้อมใช้ที่ประมาณจาก log ${C.rdEst} เคส)` : ""}`,
+        `ค่าระยะเวลา > 24 ชม. (ตรวจย้อนกลับกับแบบบันทึก) ${C.outliers} ค่า`,
+      ],
+    };
+    const months = (a) => a.slice().sort((x, y) => String(x.reportMonth).localeCompare(String(y.reportMonth))).map((t) => `${t.reportMonth}: ${f1(+t.minutes)}`).join(" · ");
+    return { rows, miss, tmMonths: { b: months(C.tmBase), a: months(C.tmPost) }, periodSet: !!s.STUDY_POST_START };
+  }
+  const SUP = { a: "Mann–Whitney U test (เชิงสำรวจ)", b: "Chi-square test", c: "Fisher’s exact test", d: "เชิงพรรณนา ไม่ทดสอบสมมติฐาน" };
+  function indSupsUsed(M) { return [...new Set(M.rows.map((r) => r.p?.sup).filter(Boolean))].sort(); }
+
+  // เอกสารตารางสำหรับวางในรายงาน (Word / PDF) — รูปแบบเดียวกับตารางในเล่ม
+  App.indTableDoc = () => {
+    const R = S.research; if (!R) return;
+    const C = compute(R, S.onlyStudy), M = indModel(C, R.settings);
+    const cell = (v) => (v ? `${esc(v.main)}` : "–");
+    const rows = M.rows.map((r) => `<tr><td class="l">${esc(r.name)}, ${esc(r.stat)}</td><td class="n">${cell(r.b)}</td><td class="n">${cell(r.a)}</td><td class="n">${r.diff ? `${esc(r.diff.main)}<br>(${esc(r.diff.sub)})` : "–"}</td><td class="n" nowrap>${r.p?.v != null ? pfmt(r.p.v).replace("< ", "<") : "–"}<sup>${r.p?.sup || ""}</sup></td></tr>`).join("");
+    const sups = indSupsUsed(M).map((k) => `<sup>${k}</sup> ${SUP[k]}`).join("; ");
+    const body = `<section class="pg"><h3>ตาราง เปรียบเทียบตัวชี้วัดก่อนและหลังใช้ระบบ SEB</h3>
+      <table class="grid"><thead><tr><th>ตัวชี้วัด</th><th>ก่อนใช้ระบบ</th><th>หลังใช้ระบบ</th><th>ผลต่าง (95% CI)</th><th>p-value</th></tr></thead><tbody>${rows}</tbody></table>
+      <p style="font-size:10pt">${sups} · ผลต่าง = หลัง − ก่อน (ระยะเวลา: ผลต่างมัธยฐาน, 95% CI แบบ bootstrap 2,000 รอบ · ร้อยละ/อัตรา: จุดร้อยละ, 95% CI แบบ Newcombe) · ค่าติดลบของระยะเวลาหมายถึงลดลง
+      <br>หมายเหตุ: ส่งแจ้งเตือนไม่สำเร็จ ${M.miss.failed} ครั้ง (ร้อยละ ${M.miss.nPost ? r1((M.miss.failed / M.miss.nPost) * 100) : "0"})
+      ${M.tmMonths.b || M.tmMonths.a ? `<br>เวลาจัดทำรายงานรายเดือน (นาที) — ก่อน: ${esc(M.tmMonths.b || "–")} · หลัง: ${esc(M.tmMonths.a || "–")}` : ""}
+      <br>ข้อมูลสูญหาย/คัดออก: ${M.miss.lines.map(esc).join(" · ")}</p></section>`;
+    App.docPreview({ title: "ตารางเปรียบเทียบก่อน–หลังใช้ระบบ SEB", file: "SEB_ตารางเปรียบเทียบก่อนหลัง", body, note: `${S.onlyStudy ? "เฉพาะ 4 หน่วยในงานวิจัย" : "ทุกจุด"} · ข้อมูล ณ ${fmtDT(new Date().toISOString())}` });
+  };
 
   // ---------------- page ----------------
   App.pageResearch = async function () {
@@ -210,30 +287,35 @@
     download(`seb-data-quality-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
   };
 
+  function indCard(C, s) {
+    const M = indModel(C, s);
+    const v = (x) => (x ? `<b class="tabnum">${esc(x.main)}</b><div class="xs faint">${esc(x.sub)}</div>` : `<span class="faint">ไม่มีข้อมูล</span>`);
+    const good = (ok) => (ok === null ? "" : ok ? "ind-good" : "ind-bad");
+    const rows = M.rows.map((r) => `<tr><td><b>${r.k}. ${esc(r.name)}</b>, ${esc(r.stat)}<div class="xs faint">${esc(r.def)}</div></td><td>${v(r.b)}</td><td class="${good(r.ok)}">${v(r.a)}</td>
+      <td class="tabnum">${r.diff ? `<b>${esc(r.diff.main)}</b><div class="xs faint">95% CI ${esc(r.diff.sub)}</div>` : "–"}</td>
+      <td class="tabnum">${r.p?.v != null ? pfmt(r.p.v) : "–"}<sup>${r.p?.sup || ""}</sup></td><td class="ind-target">${esc(r.target)}</td></tr>`).join("");
+    const sups = indSupsUsed(M).map((k) => `<sup>${k}</sup> ${SUP[k]}`).join(" · ");
+    return `<div class="card section">
+        <div class="card-head"><h3 class="grow">เปรียบเทียบก่อน–หลังใช้ระบบ (ภาคผนวก ก 1.3)</h3><button class="btn sm" onclick="App.indTableDoc()">${ic("file-text")} ตารางสำหรับรายงาน (Word/PDF)</button></div>
+        ${M.periodSet ? "" : `<div class="card-body" style="border-bottom:1px solid var(--border)"><div class="danger-text small">${ic("alert-triangle")} ยังไม่กำหนด "ช่วงใช้จริง" (เดือนที่ 4–6) ระบบจึงยังไม่นับเหตุการณ์ใดเป็นข้อมูลหลังใช้ระบบ · <a onclick="App.go('settings','study')" style="cursor:pointer;text-decoration:underline">ตั้งค่าช่วงศึกษา</a></div></div>`}
+        <div class="table-wrap"><table class="t"><thead><tr><th>ตัวชี้วัด</th><th>ก่อนใช้ระบบ</th><th>หลังใช้ระบบ</th><th>ผลต่าง (95% CI)</th><th>p-value</th><th>เป้าหมาย</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <div class="card-body xs faint" style="border-top:1px solid var(--border)">
+          ${sups} · ผลต่าง = หลัง − ก่อน · ระยะเวลา: ผลต่างมัธยฐาน (bootstrap 2,000 รอบ) · ร้อยละ/อัตรา: จุดร้อยละ (Newcombe) · Chi-square เมื่อค่าคาดหวังทุกช่อง ≥ 5 ไม่เช่นนั้น Fisher’s exact<br>
+          ${M.tmMonths.b || M.tmMonths.a ? `เวลาจัดทำรายงานรายเดือน (นาที) — ก่อน: ${esc(M.tmMonths.b || "–")} · หลัง: ${esc(M.tmMonths.a || "–")}<br>` : ""}
+          <b>ข้อมูลสูญหาย/คัดออก</b> (วิเคราะห์เฉพาะข้อมูลที่มี ไม่แทนค่า): ${M.miss.lines.map(esc).join("<br>")}<br>
+          ค่า p เป็นการวิเคราะห์เชิงสำรวจตามข้อ 5.9.6 เพราะเหตุการณ์ในหน่วยงานเดียวกันอาจไม่อิสระต่อกัน · ควรยืนยันผลด้วยโปรแกรมสถิติจากไฟล์ส่งออก
+        </div>
+      </div>`;
+  }
   function tabInd() {
     const R = S.research, s = R.settings;
     const C = compute(R, S.onlyStudy);
     const target = Number(s.RESPONSE_TARGET_MIN || 5);
-    const dB = St.describe(C.rb), dP = St.describe(C.rp);
-    const mw = St.mannWhitney(C.rb, C.rp), bd = St.bootDiff(C.rb, C.rp);
-    const eB = St.describe(C.rdBase), eP = St.describe(C.rdPost);
-    const mw2 = St.mannWhitney(C.rdBase, C.rdPost), bd2 = St.bootDiff(C.rdBase, C.rdPost);
-    const ciB = St.exactCI(C.recBase.ok, C.recBase.tot), ciP = St.exactCI(C.recPost.ok, C.recPost.tot);
-    const fRec = St.fisher(C.recBase.ok, C.recBase.tot - C.recBase.ok, C.recPost.ok, C.recPost.tot - C.recPost.ok);
-    const xB = St.exactCI(C.expBase.x, C.expBase.n), xP = St.exactCI(C.expPost.x, C.expPost.n);
-    const fExp = St.fisher(C.expBase.x, C.expBase.n - C.expBase.x, C.expPost.x, C.expPost.n - C.expPost.x);
-    const yB = St.exactCI(C.rdyBase.x, C.rdyBase.n), yP = St.exactCI(C.rdyPost.x, C.rdyPost.n);
-    const fRdy = St.fisher(C.rdyBase.x, C.rdyBase.n - C.rdyBase.x, C.rdyPost.x, C.rdyPost.n - C.rdyPost.x);
+    const dP = St.describe(C.rp), eP = St.describe(C.rdPost);
+    const ciP = St.exactCI(C.recPost.ok, C.recPost.tot);
     const within = C.rp.filter((x) => x <= target).length;
-    const md = (d) => d.n ? `<b class="tabnum">${r1(d.med)}</b> <span class="faint small">(${r1(d.q1)}–${r1(d.q3)})</span><div class="xs faint">n = ${d.n}</div>` : `<span class="faint">ไม่มีข้อมูล</span>`;
-    const pr = (c, x) => c ? `<b class="tabnum">${pct(c.p)}</b> <span class="faint small">(${pct(c.lo)}–${pct(c.hi)})</span><div class="xs faint">${x}</div>` : `<span class="faint">ไม่มีข้อมูล</span>`;
-    const per100 = (c, x, n) => c ? `<b class="tabnum">${r1(c.p * 100)}</b> <span class="faint small">(${r1(c.lo * 100)}–${r1(c.hi * 100)})</span><div class="xs faint">${x}/${n} รายการ</div>` : `<span class="faint">ไม่มีข้อมูล</span>`;
-    const good = (ok) => (ok === null ? "" : ok ? "ind-good" : "ind-bad");
     const survey = R.survey;
     const sv = survey.length ? { n: survey.length, overall: St.mean(survey.map((x) => +x.overallScore)), acc: St.exactCI(survey.filter((x) => x.accepted).length, survey.length) } : null;
-
-    const tmByMonth = {};
-    C.timings.forEach((t) => (tmByMonth[t.reportMonth] = [...(tmByMonth[t.reportMonth] || []), { m: +t.minutes, src: t.source }]));
 
     $("#resBody").innerHTML = `
       <div class="row between wrap mb-16 gap-12">
@@ -246,21 +328,7 @@
         ${kpi("ความครบถ้วนการบันทึก", ciP ? pct(ciP.p) : "–", "list-check", "ok", "เป้า ≥ 95%")}
         ${kpi("ความพึงพอใจรวม", sv ? r1(sv.overall) : "–", "mood-happy", "info", sv ? `ยอมรับ ${pct(sv.acc.p)} · n = ${sv.n}` : "ยังไม่มีผู้ตอบ", sv ? " / 5" : "")}
       </div>
-      <div class="card section">
-        <div class="card-head"><h3 class="grow">เปรียบเทียบก่อน–หลังใช้ระบบ (ภาคผนวก ก 1.3)</h3><span class="xs faint">มัธยฐาน (IQR) · ร้อยละ (95% CI แบบ exact)</span></div>
-        <div class="table-wrap"><table class="t"><thead><tr><th>ตัวชี้วัด</th><th>ก่อนใช้ระบบ</th><th>หลังใช้ระบบ</th><th>ผลต่าง</th><th>p (สำรวจ)</th><th>เป้าหมาย</th></tr></thead><tbody>
-          <tr><td><b>1. Response time</b><div class="xs faint">ก่อน: รับทราบ − หน่วยงานแจ้ง · หลัง: acknowledged_at − notification_sent_at</div></td><td>${md(dB)}</td><td class="${good(dP.n ? dP.med <= target : null)}">${md(dP)}</td><td class="tabnum">${bd ? `${r1(bd.est)} <div class="xs faint">95% CI ${r1(bd.lo)} ถึง ${r1(bd.hi)}</div>` : "–"}</td><td class="tabnum">${mw ? pfmt(mw.p) : "–"}<div class="xs faint">Mann–Whitney U</div></td><td class="ind-target">≤ ${target} นาที</td></tr>
-          <tr><td><b>2. Box readiness time</b><div class="xs faint">ready_at − actual_opened_at</div></td><td>${md(eB)}</td><td>${md(eP)}</td><td class="tabnum">${bd2 ? `${r1(bd2.est)} <div class="xs faint">95% CI ${r1(bd2.lo)} ถึง ${r1(bd2.hi)}</div>` : "–"}</td><td class="tabnum">${mw2 ? pfmt(mw2.p) : "–"}</td><td class="ind-target">ลดลงจาก baseline</td></tr>
-          <tr><td><b>3. ความครบถ้วนของการบันทึก</b><div class="xs faint">แบบบันทึกที่ครบ / ทั้งหมด</div></td><td>${pr(ciB, `${C.recBase.ok}/${C.recBase.tot}`)}</td><td class="${good(ciP ? ciP.p >= 0.95 : null)}">${pr(ciP, `${C.recPost.ok}/${C.recPost.tot}`)}</td><td class="tabnum">${ciB && ciP ? `${r1((ciP.p - ciB.p) * 100)} จุด%` : "–"}</td><td class="tabnum">${pfmt(fRec)}<div class="xs faint">Fisher’s exact</div></td><td class="ind-target">≥ 95%</td></tr>
-          <tr><td><b>4. ยาหมดอายุ ต่อ 100 รายการที่ตรวจ</b></td><td>${per100(xB, C.expBase.x, C.expBase.n)}</td><td class="${good(xP ? xP.p === 0 : null)}">${per100(xP, C.expPost.x, C.expPost.n)}</td><td class="tabnum">${xB && xP ? r1((xP.p - xB.p) * 100) : "–"}</td><td class="tabnum">${pfmt(fExp)}</td><td class="ind-target">0</td></tr>
-          <tr><td><b>5. การตรวจที่กล่องพร้อมใช้</b><div class="xs faint">ยาครบตามชุด และไม่มีหมดอายุ</div></td><td>${pr(yB, `${C.rdyBase.x}/${C.rdyBase.n} ครั้ง`)}</td><td class="${good(yP ? yP.p >= 0.95 : null)}">${pr(yP, `${C.rdyPost.x}/${C.rdyPost.n} ครั้ง`)}</td><td class="tabnum">${yB && yP ? `${r1((yP.p - yB.p) * 100)} จุด%` : "–"}</td><td class="tabnum">${pfmt(fRdy)}</td><td class="ind-target">≥ 95%</td></tr>
-          <tr><td><b>6. เวลาจัดทำรายงานประจำเดือน</b><div class="xs faint">เชิงพรรณนา ไม่ทดสอบสมมติฐาน</div></td><td colspan="4" class="small">${Object.keys(tmByMonth).length ? Object.entries(tmByMonth).sort().map(([m, a]) => `<span class="tag" style="margin:2px">${m}: ${a.map((x) => r1(x.m)).join(", ")} นาที${a[0].src === "paper" ? " (กระดาษ)" : ""}</span>`).join("") : `<span class="faint">ยังไม่มีข้อมูล · บันทึกได้ที่แท็บ "ข้อมูล baseline"</span>`}</td><td class="ind-target">≤ 30 นาที</td></tr>
-        </tbody></table></div>
-        <div class="card-body xs faint" style="border-top:1px solid var(--border)">
-          ข้อมูลสูญหาย/คัดออก: แจ้งเตือนส่งไม่สำเร็จ ${C.failed} เคส · ข้อมูลระบบรุ่นแรก (ไม่มีเวลาส่ง) ${C.legacy} เคส · ค่าผิดปกติ &gt; 24 ชม. ${C.outliers} ค่า · ready_at ประมาณจาก log ${C.rdEst} เคส (ไม่นำมาคำนวณ)<br>
-          ค่า p เป็นการวิเคราะห์เชิงสำรวจตามข้อ 5.9.6 เพราะเหตุการณ์ในหน่วยงานเดียวกันอาจไม่อิสระต่อกัน · ผลต่างมัธยฐานใช้ bootstrap 2,000 รอบ · ควรยืนยันผลด้วยโปรแกรมสถิติจากไฟล์ส่งออก
-        </div>
-      </div>
+      ${indCard(C, s)}
       <div class="grid grid-2 section">
         <div class="card"><div class="card-head"><h3 class="grow">Response time รายหน่วยงาน (post)</h3></div><div class="card-body">${Object.keys(C.units).length ? hbars(Object.entries(C.units).map(([k, a]) => [k, St.describe(a).med, `n=${a.length}`]), "นาที") : empty("ยังไม่มีข้อมูลช่วงใช้จริง", "chart-bar-off")}</div></div>
         <div class="card"><div class="card-head"><h3 class="grow">การเปิดกล่องรายเดือน</h3></div><div class="card-body">${monthBars(C.ev.filter((e) => e.source !== "paper"))}</div></div>

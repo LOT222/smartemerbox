@@ -23,6 +23,8 @@
     table.grid th,table.grid td{border:1px solid #444;padding:3px 6px;vertical-align:top}
     table.grid th{background:#eee;font-weight:bold;text-align:center}
     table.grid td.c{text-align:center;width:9%}
+    table.grid td.n{text-align:center;white-space:nowrap}
+    table.grid sup{font-size:70%}
     table.grid tr.sec td{background:#f5f5f5;font-weight:bold}
     table.sigs{width:100%;border-collapse:collapse;margin-top:8mm}
     table.sigs td{width:33%;text-align:center;vertical-align:bottom;padding:0 3mm;font-size:10pt}
@@ -46,6 +48,8 @@
       .replace(/<th>/g, `<th style="border:1px solid #444;background:#eeeeee">`)
       .replace(/<td class="c">/g, `<td class="c" align="center" style="border:1px solid #444;text-align:center">`)
       .replace(/<tr class="sec"><td colspan="7">/g, `<tr class="sec"><td colspan="7" style="border:1px solid #444;background:#f5f5f5;font-weight:bold">`)
+      .replace(/<td class="l">/g, `<td style="border:1px solid #444">`)
+      .replace(/<td class="n"/g, `<td align="center" style="border:1px solid #444;text-align:center;white-space:nowrap"`)
       .replace(/<table class="sigs">/g, `<table class="sigs" width="100%" style="width:100%">`);
     return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${esc(title)}</title>
       <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]--><style>${WORD_CSS}</style></head><body><div class="WordSection1">${b}</div></body></html>`;
