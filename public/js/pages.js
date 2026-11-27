@@ -51,7 +51,7 @@
     $("#content").innerHTML = `
       <div class="row between wrap mb-16"><div class="muted">${hello}, ${esc(S.user.displayName)} · ${fmtD(new Date().toISOString())}</div>
         <div class="row"><span class="pill ${st.pendingCases ? "danger live" : "ok"}">${st.pendingCases ? `${st.pendingCases} เคสรอดำเนินการ` : "ไม่มีเคสค้าง"}</span></div></div>
-      <div id="pushPrompt"></div>${App.consentInviteHtml ? App.consentInviteHtml() : ""}
+      <div id="pushPrompt"></div>${App.consentInviteHtml ? App.consentInviteHtml() : ""}${App.surveyInviteHtml ? App.surveyInviteHtml() : ""}
       ${mophAlert()}
       ${pend.length ? `<div class="col gap-8 mb-16">${pend.map(alertCase).join("")}</div>` : ""}
       <div class="grid grid-4">

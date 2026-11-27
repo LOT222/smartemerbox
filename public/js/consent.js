@@ -74,6 +74,22 @@
       <div class="grow"><div class="a-title">คำเชิญเข้าร่วมโครงการวิจัย (สมัครใจ)</div><div class="a-sub">อ่านเอกสารชี้แจง แล้วตัดสินใจภายหลังได้ การไม่เข้าร่วมไม่มีผลต่อการทำงานหรือการใช้ระบบ</div></div>
       <div class="row"><button class="btn ghost sm" onclick="sessionStorage.setItem('seb_hide_consent','1');this.closest('.alert').remove()">ภายหลัง</button><button class="btn sm" onclick="App.go('consent')">อ่านเอกสาร</button></div></div>`;
   };
+  // คำเชิญตอบแบบสอบถาม (Google Form ตามภาคผนวก ข) · แสดงเฉพาะผู้ที่ยินยอมเข้าร่วมวิจัย (กระดาษหรืออิเล็กทรอนิกส์)
+  // ระบบไม่บันทึกว่าใครเปิด/ตอบ (คงความไม่ระบุตัวบุคคล) · "ตอบแล้ว" ซ่อนบนเครื่องนี้เท่านั้น
+  App.surveyInviteHtml = function () {
+    const st = set();
+    const url = String(st.SURVEY_FORM_URL || "").trim();
+    if (!S.user || st.SURVEY_OPEN !== "1" || !/^https:\/\//.test(url)) return "";
+    const signed = S.consentStatus?.record?.status === "signed";
+    if (!S.user.researchConsent && !signed) return "";
+    let hidden = false; try { hidden = localStorage.getItem("seb_survey_done_" + S.user.id) === "1"; } catch (_) {}
+    if (hidden) return "";
+    return `<div class="alert info mb-16"><div class="a-icon">${ic("clipboard-check")}</div>
+      <div class="grow"><div class="a-title">แบบสอบถามความพึงพอใจและประสบการณ์ผู้ใช้งาน (โครงการวิจัย)</div><div class="a-sub">ใช้เวลาประมาณ 15–20 นาที · กรอก<b>รหัสผู้ตอบ</b>ที่ผู้วิจัยแจก ไม่ต้องกรอกชื่อ · ระบบ SEB ไม่บันทึกว่าท่านเปิดหรือตอบ</div></div>
+      <div class="row"><button class="btn ghost sm" onclick="App.surveyDone()">ตอบแล้ว</button><a class="btn sm primary" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${ic("external-link")} ตอบแบบสอบถาม</a></div></div>`;
+  };
+  App.surveyDone = () => { try { localStorage.setItem("seb_survey_done_" + S.user.id, "1"); } catch (_) {} App.render(); };
+
   App.loadConsentStatus = async function () {
     if (!econsentOn()) return;
     try { S.consentStatus = await api("apiConsentStatus", S.token); } catch (_) {}

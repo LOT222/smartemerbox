@@ -368,10 +368,28 @@
     } catch (e) { fail(e); }
   };
 
+  // ---------------- Google Form (ภาคผนวก ข) ----------------
+  function gformCard() {
+    const st = S.data?.settings || {};
+    const u = String(st.SURVEY_FORM_URL || "");
+    return `<div class="card card-pad"><h3>Google Form (ภาคผนวก ข)</h3><div class="muted small mt-4">ตามโครงการที่ EC รับรอง: ตอบผ่าน Google Form หรือกระดาษ · ใส่ลิงก์แล้ว ผู้ที่ยินยอมเข้าร่วมวิจัยจะเห็นปุ่ม "ตอบแบบสอบถาม" บนหน้าภาพรวม</div>
+      <label class="field mt-12"><span>ลิงก์ส่งให้ผู้ตอบ (https://docs.google.com/forms/… หรือ forms.gle/…)</span><input class="input mono" id="gfUrl" value="${esc(u)}" placeholder="https://forms.gle/…"></label>
+      <label class="row mt-12" style="gap:12px"><span class="switch"><input type="checkbox" id="gfOpen" ${st.SURVEY_OPEN === "1" ? "checked" : ""}><span></span></span><span><b>เปิดให้ผู้เข้าร่วมตอบ</b><div class="xs faint">เปิดเมื่อสิ้นสุดการใช้ระบบ (เดือนที่ 6) · ปิดได้ทุกเมื่อ</div></span></label>
+      <div class="row mt-12" style="justify-content:flex-end">${u ? `<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener">${ic("external-link")} เปิดดู</a>` : ""}<button class="btn sm primary" onclick="App.saveGform()">บันทึก</button></div></div>`;
+  }
+  App.saveGform = async () => {
+    const u = $("#gfUrl").value.trim();
+    if (u && !/^https:\/\/(docs\.google\.com\/forms\/|forms\.gle\/)/.test(u)) return toast("ต้องเป็นลิงก์ Google Form (docs.google.com/forms หรือ forms.gle)", true);
+    const open = $("#gfOpen").checked;
+    if (open && !u) return toast("ใส่ลิงก์ Google Form ก่อนเปิดให้ตอบ", true);
+    try { const r = await api("apiSaveSettings", S.token, { SURVEY_FORM_URL: u, SURVEY_OPEN: open ? "1" : "0" }); S.data = r.data; toast("บันทึกแล้ว"); App.render(); } catch (e) { fail(e); }
+  };
+
   // ---------------- survey summary ----------------
   function tabSurvey() {
     const R = S.research, sv = R.survey;
-    const url = `${location.origin}${location.pathname}?${S.demo ? "demo=1&" : ""}page=survey`;
+    const gUrl = String(S.data?.settings?.SURVEY_FORM_URL || "").trim();
+    const url = gUrl || `${location.origin}${location.pathname}?${S.demo ? "demo=1&" : ""}page=survey`;
     const dims = [["usabilityScore", "ความง่ายในการใช้งาน", "ข้อ 1–5"], ["performanceScore", "ประสิทธิภาพของระบบ", "ข้อ 6–10"], ["usefulnessScore", "ประโยชน์ที่ได้รับ", "ข้อ 11–15"], ["trustScore", "ความเชื่อมั่นและความปลอดภัย", "ข้อ 16–19"], ["acceptanceScore", "ความพึงพอใจโดยรวมและการยอมรับ", "ข้อ 20–22"], ["overallScore", "คะแนนรวม 22 ข้อ", ""]];
     const acc = St.exactCI(sv.filter((x) => x.accepted).length, sv.length);
     const level = (m) => (m >= 4.51 ? "มากที่สุด" : m >= 3.51 ? "มาก" : m >= 2.51 ? "ปานกลาง" : m >= 1.51 ? "น้อย" : "น้อยที่สุด");
@@ -386,7 +404,7 @@
       <div class="col gap-16"><div class="card card-pad center"><h3>ลิงก์แบบสอบถาม</h3><div class="muted small mt-4">ให้ผู้เข้าร่วมวิจัยตอบ 1 ครั้งเมื่อสิ้นสุดการใช้ระบบ (เดือนที่ 6)</div>
         <div style="width:180px;margin:16px auto">${App.qrSvgFor(url, 4)}</div><div class="mono xs" style="word-break:break-all">${esc(url)}</div>
         <div class="row mt-12" style="justify-content:center"><button class="btn sm" onclick="navigator.clipboard.writeText('${esc(url)}').then(()=>SEB.toast('คัดลอกแล้ว'))">${ic("copy")} คัดลอกลิงก์</button><a class="btn sm" href="${esc(url)}" target="_blank">${ic("external-link")} เปิด</a></div>
-        <div class="xs faint mt-16" style="text-align:left">แบบสอบถามตรงตามฉบับที่ EC รับรอง: ข้อมูลทั่วไป 6 ข้อ · Likert 22 ข้อ 5 มิติ · เปรียบเทียบ 6 ข้อ · ปลายเปิด 5 ข้อ · ผู้ตอบใช้รหัสที่ผู้วิจัยแจก ไม่ผูกกับบัญชีผู้ใช้</div></div>${App.surveyDocsCard()}</div></div>`;
+        <div class="xs faint mt-16" style="text-align:left">แบบสอบถามตรงตามฉบับที่ EC รับรอง: ข้อมูลทั่วไป 6 ข้อ · Likert 22 ข้อ 5 มิติ · เปรียบเทียบ 6 ข้อ · ปลายเปิด 5 ข้อ · ผู้ตอบใช้รหัสที่ผู้วิจัยแจก ไม่ผูกกับบัญชีผู้ใช้</div></div>${gformCard()}${App.surveyDocsCard()}</div></div>`;
   }
 
   // ---------------- export ----------------
